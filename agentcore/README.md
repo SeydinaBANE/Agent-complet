@@ -40,12 +40,33 @@ alembic upgrade head
 uvicorn agentcore.main:app --reload --port 8000
 ```
 
+## Architecture
+
+```
+POST /api/v1/agents/run → ARQ queue → LangGraph StateGraph
+                                           ↓
+                                   planner  (decompose goal into tasks)
+                                           ↓
+                                   executor (run tool, check guardrails)
+                                           ↓
+                                   validator (synthesize answer / retry)
+```
+
+The graph is async and runs in a background ARQ worker. Results stream via Redis pub/sub to the WebSocket endpoint.
+
+## Guardrails
+
+- **Budget**: `budget_usd` per run — aborts if `cost_usd` exceeded
+- **Iterations**: default max 10 — prevents loops
+- **Scope**: blocks `localhost`, `169.254.169.254`, `*.internal`
+- **Kill switch**: `POST /stop` sets a Redis cancel key; executor checks it every iteration
+- **Retry**: `tenacity` retries LLM calls up to 3× with exponential backoff on 429/5xx
+
 ## Tests
 
 ```bash
-pytest                              # all tests
+pytest                              # all tests (64 tests · 90% coverage)
 pytest tests/unit/                  # unit tests only (no network)
 pytest tests/integration/           # integration tests (needs DB + Redis)
-pytest -m "not slow"               # skip slow eval tests
-pytest --cov=agentcore --cov-report=html  # with coverage report
+pytest --cov=agentcore --cov-report=html  # with HTML coverage report
 ```

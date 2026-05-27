@@ -46,11 +46,20 @@ cd ../client && npm install
 npm run dev          # React on :5173
 ```
 
+## Integration with AgentCore
+
+The `ai-agent` node sends:
+```json
+POST http://agentcore:8000/api/v1/agents/run
+{ "goal": "Analyse: {{context.text}}", "max_iterations": 3 }
+```
+Then polls `GET /api/v1/agents/{run_id}` every 2s until `status === "completed"` and injects the result into the workflow context.
+
 ## Tests
 
 ```bash
 cd server
-npm test                  # all tests
-npm run typecheck         # TypeScript check
+npm test                  # 18 tests (engine, nodes, queue worker)
+npm run typecheck         # TypeScript strict check
 npm run lint              # ESLint
 ```
