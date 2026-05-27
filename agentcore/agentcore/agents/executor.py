@@ -1,3 +1,4 @@
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import structlog
@@ -9,7 +10,9 @@ from agentcore.tools.web_search import search_web
 
 log = structlog.get_logger()
 
-TOOL_REGISTRY = {
+ToolFn = Callable[..., Awaitable[Any]]
+
+TOOL_REGISTRY: dict[str, ToolFn] = {
     "web_search": search_web,
     "http_caller": call_http,
     "memory_read": read_memory,

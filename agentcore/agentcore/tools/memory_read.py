@@ -9,4 +9,4 @@ async def read_memory(key: str, run_id: str = "") -> str | None:
         value = await r.get(f"agent:memory:{key}")
         return value.decode() if value else None
     finally:
-        await r.aclose()
+        await r.aclose()  # type: ignore[attr-defined]

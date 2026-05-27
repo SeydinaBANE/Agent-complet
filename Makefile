@@ -16,23 +16,23 @@ migrate: ## Run all database migrations
 	docker compose run --rm agentcore alembic upgrade head
 	cd flowrunner/server && npm run db:migrate
 
-test: ## Run all tests
+test: ## Run all tests (set env vars or use a .env file)
 	cd agentcore && pytest --cov=agentcore --cov-report=term-missing
-	cd flowrunner && npm test
+	cd flowrunner/server && npm test
 
 test-ac: ## Run AgentCore tests only
 	cd agentcore && pytest -v
 
 test-fr: ## Run FlowRunner tests only
-	cd flowrunner && npm test
+	cd flowrunner/server && npm test
 
 lint: ## Lint both projects
 	cd agentcore && ruff check .
-	cd flowrunner && npm run lint
+	cd flowrunner/server && npm run lint
 
 typecheck: ## Type-check both projects
 	cd agentcore && mypy agentcore/
-	cd flowrunner && npm run typecheck
+	cd flowrunner/server && npm run typecheck
 
 build: ## Build Docker images
 	docker compose build
