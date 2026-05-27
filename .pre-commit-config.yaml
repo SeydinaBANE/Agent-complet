@@ -1,0 +1,44 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        files: ^agentcore/
+        additional_dependencies:
+          - pydantic
+          - fastapi
+          - types-redis
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint (flowrunner)
+        entry: bash -c 'cd flowrunner && npm run lint --if-present 2>/dev/null || true'
+        language: system
+        pass_filenames: false
+        files: ^flowrunner/
+
+      - id: tsc
+        name: tsc (flowrunner)
+        entry: bash -c 'cd flowrunner && npm run typecheck --if-present 2>/dev/null || true'
+        language: system
+        pass_filenames: false
+        files: ^flowrunner/

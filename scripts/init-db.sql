@@ -1,0 +1,2 @@
+CREATE DATABASE agentcore;
+CREATE DATABASE flowrunner;
