@@ -45,7 +45,7 @@ clean: ## Remove containers, volumes, and caches
 install: ## Install all local dependencies
 	cd agentcore && pip install -r requirements-dev.txt
 	pre-commit install
-	cd flowrunner && npm install
+	cd flowrunner/server && npm install
 	cd flowrunner/client && npm install
 
 dev-ac: ## Start AgentCore in dev mode (hot-reload)
