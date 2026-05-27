@@ -6,7 +6,11 @@ DEFAULT_TTL_SECONDS = 86400  # 24h
 
 
 async def write_memory(
-    key: str, value: str, ttl: int = DEFAULT_TTL_SECONDS, run_id: str = ""
+    key: str = "",
+    value: str = "",
+    ttl: int = DEFAULT_TTL_SECONDS,
+    run_id: str = "",
+    **_kwargs: object,
 ) -> bool:
     r = aioredis.from_url(settings.redis_url)
     try:

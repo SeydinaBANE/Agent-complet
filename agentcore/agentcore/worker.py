@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Any
 
 import structlog
+from arq.connections import RedisSettings
 from sqlalchemy import update
 
 from agentcore.agents.graph import build_graph
@@ -84,8 +85,13 @@ async def run_agent_job(
     return {"run_id": run_id, "status": final_state.get("status")}
 
 
+def _redis_settings() -> RedisSettings:
+    url = settings.redis_url
+    return RedisSettings.from_dsn(url)
+
+
 class WorkerSettings:
     functions = [run_agent_job]
-    redis_settings = settings.redis_url  # type: ignore[assignment]
+    redis_settings = _redis_settings()
     max_jobs = 10
-    job_timeout = 300  # 5 minutes max per job
+    job_timeout = 300
