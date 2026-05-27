@@ -1,4 +1,9 @@
+from contextlib import asynccontextmanager
+from typing import Any
+
 import structlog
+from arq import create_pool
+from arq.connections import RedisSettings
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -9,16 +14,32 @@ from slowapi.util import get_remote_address
 
 from agentcore.api.routes import agents, eval, health, tools
 from agentcore.config import settings
+from agentcore.db.session import engine
 
 log = structlog.get_logger()
 
 limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> Any:
+    # Startup
+    arq_pool = await create_pool(RedisSettings.from_dsn(settings.redis_url))
+    app.state.arq = arq_pool
+    log.info("startup_complete")
+    yield
+    # Shutdown
+    await arq_pool.aclose()
+    await engine.dispose()
+    log.info("shutdown_complete")
+
 
 app = FastAPI(
     title="AgentCore",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 app.state.limiter = limiter
