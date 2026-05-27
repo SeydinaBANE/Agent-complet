@@ -33,16 +33,20 @@ services:
       - "8000:8000"
     volumes:
       - ./agentcore:/app
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn agentcore.main:app --host 0.0.0.0 --port 8000 --reload"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
 
   flowrunner:
     build: ./flowrunner/server
@@ -52,6 +56,9 @@ services:
     volumes:
       - ./flowrunner/server:/app
       - /app/node_modules
+    command: >
+      sh -c "node --import tsx/esm scripts/migrate.ts &&
+             npm run dev"
     depends_on:
       postgres:
         condition: service_healthy

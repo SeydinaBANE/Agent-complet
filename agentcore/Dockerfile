@@ -1,14 +1,10 @@
-FROM python:3.12-slim AS builder
+FROM python:3.12-slim
 
 WORKDIR /app
-COPY pyproject.toml .
-RUN pip install --no-cache-dir -e ".[dev]"
 
-FROM python:3.12-slim AS production
+COPY requirements.txt .
+RUN pip install --no-cache-dir --timeout 120 -r requirements.txt
 
-WORKDIR /app
-COPY --from=builder /usr/local/lib/python3.12 /usr/local/lib/python3.12
-COPY --from=builder /usr/local/bin /usr/local/bin
 COPY . .
 
 EXPOSE 8000

@@ -12,6 +12,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
+# Keep tsx available for migrations at runtime
+RUN npm install tsx
 
 EXPOSE 3001
 CMD ["node", "dist/index.js"]
