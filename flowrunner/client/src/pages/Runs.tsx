@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 
 type Run = {
   id: string;
@@ -42,7 +43,11 @@ export default function Runs() {
         <tbody>
           {(data?.data ?? []).map((run) => (
             <tr key={run.id} className="border-b border-gray-800 hover:bg-gray-800/50">
-              <td className="py-3 pr-4 font-mono text-xs">{run.id.slice(0, 8)}</td>
+              <td className="py-3 pr-4 font-mono text-xs">
+                <Link to={`/runs/${run.id}`} className="text-indigo-400 hover:underline">
+                  {run.id.slice(0, 8)}
+                </Link>
+              </td>
               <td className="py-3 pr-4 font-mono text-xs">{run.workflow_id.slice(0, 8)}</td>
               <td className="py-3 pr-4">
                 <span className={`inline-block w-2 h-2 rounded-full mr-2 ${STATUS_COLORS[run.status] ?? "bg-gray-500"}`} />

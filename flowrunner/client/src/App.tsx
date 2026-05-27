@@ -1,6 +1,7 @@
 import { Route, Routes, NavLink } from "react-router-dom";
 import Editor from "./pages/Editor.js";
 import Runs from "./pages/Runs.js";
+import RunDetail from "./pages/RunDetail.js";
 import Monitor from "./pages/Monitor.js";
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/" element={<Monitor />} />
         <Route path="/editor" element={<Editor />} />
         <Route path="/runs" element={<Runs />} />
+        <Route path="/runs/:id" element={<RunDetail />} />
         <Route path="/monitor" element={<Monitor />} />
       </Routes>
     </div>
