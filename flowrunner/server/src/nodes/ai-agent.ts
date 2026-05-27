@@ -7,7 +7,7 @@ const POLL_TIMEOUT_MS = 120_000;
 export async function executeAiAgentNode(
   node: WorkflowNode,
   ctx: WorkflowContext,
-  runId: string,
+  _runId: string,
 ): Promise<WorkflowContext> {
   const { goal_template, model, max_iterations = 5, budget_usd = 0.05 } = node.data as {
     goal_template: string;

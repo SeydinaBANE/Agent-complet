@@ -12,11 +12,13 @@ export async function executeHttpNode(
     body?: unknown;
   };
 
-  const response = await fetch(url, {
+  const init: RequestInit = {
     method,
     headers: { "Content-Type": "application/json", ...headers },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  };
+  if (body !== undefined) init.body = JSON.stringify(body);
+
+  const response = await fetch(url, init);
 
   const responseBody = await response.text();
   let parsedBody: unknown = responseBody;

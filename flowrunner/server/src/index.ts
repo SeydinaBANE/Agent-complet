@@ -5,6 +5,8 @@ import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 
 import { env } from "./config.js";
+import { sql } from "./db.js";
+import { startWorker } from "./queue.js";
 import { healthRoutes } from "./routes/health.js";
 import { workflowRoutes } from "./routes/workflows.js";
 import { runRoutes } from "./routes/runs.js";
@@ -40,9 +42,16 @@ app.setErrorHandler((error, _request, reply) => {
   });
 });
 
+const worker = startWorker();
+worker.on("failed", (job, err) => {
+  app.log.error({ jobId: job?.id, err }, "workflow_job_failed");
+});
+
 try {
   await app.listen({ port: env.PORT, host: "0.0.0.0" });
 } catch (err) {
   app.log.error(err);
+  await worker.close();
+  await sql.end();
   process.exit(1);
 }
