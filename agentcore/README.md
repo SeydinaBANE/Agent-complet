@@ -3,70 +3,181 @@
 Multi-agent orchestration API — autonomous agents with tools, memory, guardrails, and reliability evaluation.
 
 ## Stack
+
 Python 3.12 · FastAPI · LangGraph · OpenRouter · PostgreSQL · Redis · ARQ · Docker
 
 ## API
 
-All routes under `/api/v1/`. Auth: `X-API-Key` header.
+All routes under `/api/v1/`. Authentication: `X-API-Key` header (required on every request).
+
+### Agent runs
+
+| Method | Route | Status | Description |
+|--------|-------|--------|-------------|
+| `POST` | `/api/v1/agents/run` | 202 | Start an agent run. Returns `run_id` immediately; processing is async. |
+| `GET` | `/api/v1/agents/{run_id}` | 200 | Run status, cost, and token counts. |
+| `POST` | `/api/v1/agents/{run_id}/stop` | 204 | Kill switch — sets a Redis cancellation flag; agent stops at the next iteration. |
+| `GET` | `/api/v1/agents` | 200 | List runs, cursor-based pagination (`?cursor=<uuid>&limit=20`). |
+| `WS` | `/api/v1/agents/{run_id}/stream` | — | Real-time event stream over WebSocket. |
+
+### Tools & eval
 
 | Method | Route | Description |
 |--------|-------|-------------|
-| `POST` | `/api/v1/agents/run` | Start an agent run (async, returns `run_id`) |
-| `GET` | `/api/v1/agents/{run_id}` | Get run status and cost |
-| `POST` | `/api/v1/agents/{run_id}/stop` | Kill switch |
-| `GET` | `/api/v1/agents` | List runs (cursor pagination) |
-| `WS` | `/api/v1/agents/{run_id}/stream` | Real-time action stream |
-| `GET` | `/api/v1/tools` | List available tools |
-| `POST` | `/api/v1/eval/run` | Start adversarial eval suite |
-| `GET` | `/health` | Liveness probe |
-| `GET` | `/ready` | Readiness probe (checks DB + Redis) |
-| `GET` | `/docs` | OpenAPI docs |
-| `GET` | `/metrics` | Prometheus metrics |
+| `GET` | `/api/v1/tools` | List available tools and their descriptions. |
+| `POST` | `/api/v1/eval/run` | Start an adversarial eval suite against the agent. |
+
+### Infrastructure
+
+| Route | Description |
+|-------|-------------|
+| `GET /health` | Liveness probe — `{"status":"ok"}` |
+| `GET /ready` | Readiness probe — checks DB + Redis connectivity |
+| `GET /docs` | Interactive OpenAPI docs (Swagger UI) |
+| `GET /metrics` | Prometheus metrics |
+
+### POST /api/v1/agents/run — request body
+
+```json
+{
+  "goal": "Search for the latest news about LangGraph and summarize the top 3 results",
+  "model": "openai/gpt-4o-mini",
+  "max_iterations": 10,
+  "max_tokens": 4000,
+  "budget_usd": 0.10,
+  "tools": ["web_search", "http_caller", "memory_read", "memory_write"]
+}
+```
+
+| Field | Required | Default | Constraints |
+|-------|----------|---------|-------------|
+| `goal` | yes | — | 1–2000 chars |
+| `model` | no | `OPENROUTER_DEFAULT_MODEL` | Any valid OpenRouter model ID |
+| `max_iterations` | no | `DEFAULT_MAX_ITERATIONS` | 1–50 |
+| `max_tokens` | no | `DEFAULT_MAX_TOKENS` | 100–32000 |
+| `budget_usd` | no | `DEFAULT_BUDGET_USD` | 0.001–10.0 |
+| `tools` | no | all 4 tools | Whitelist of allowed tool names |
+
+### GET /api/v1/agents/{run_id} — response
+
+```json
+{
+  "run_id": "d6be4ecb-9814-4851-a9b1-066e3c288418",
+  "status": "completed",
+  "goal": "Search for the latest news...",
+  "model": "openai/gpt-4o-mini",
+  "iteration_count": 3,
+  "input_tokens": 1240,
+  "output_tokens": 387,
+  "cost_usd": 0.000248,
+  "error": null
+}
+```
+
+Status values: `pending` → `running` → `completed` | `failed` | `killed`
+
+### WebSocket stream events
+
+```
+{ "type": "subscribed",    "run_id": "..." }
+{ "type": "planner_start", "goal": "..." }
+{ "type": "plan_ready",    "tasks": 3 }
+{ "type": "tool_call",     "tool": "web_search", "task": "..." }
+{ "type": "tool_result",   "tool": "web_search", "success": true }
+{ "type": "synthesizing" }
+{ "type": "completed",     "answer": "..." }
+```
+
+---
+
+## LangGraph graph
+
+```
+START → planner → executor → validator
+                     ↑            │
+                     └── loop ────┘  (while tasks remain)
+                                  │
+                                 END  (completed | failed | killed)
+```
+
+The planner decomposes the goal into a list of `{task, tool, tool_input}` objects in a single LLM call. The executor runs them one at a time. The validator synthesizes the final answer once all tasks are done.
+
+---
+
+## Available tools
+
+| Name | Description | Key inputs |
+|------|-------------|------------|
+| `web_search` | DuckDuckGo text search, up to 5 results | `query: str`, `max_results: int` |
+| `http_caller` | Arbitrary GET/POST. Blocked: localhost, 169.254.169.254, *.internal | `url`, `method`, `headers`, `body` |
+| `memory_read` | Read from Redis key `agent:memory:{key}` | `key: str` |
+| `memory_write` | Write to Redis with TTL (default 24h) | `key`, `value`, `ttl` |
+
+---
+
+## Guardrails
+
+| Guardrail | Trigger | Effect |
+|-----------|---------|--------|
+| Budget | `cost_usd > budget_usd` | Run fails with `BudgetExceededError` |
+| Iterations | `iteration_count >= max_iterations` | Run fails with `MaxIterationsError` |
+| Scope | URL targets blocked hosts | `ScopeViolationError` — tool call aborted |
+| Audit | Every tool call | Logged in `actions` table (immutable) |
+| Kill switch | `POST /stop` called | Redis flag checked every iteration |
+| LLM retry | 429 or 5xx from OpenRouter | `tenacity` retries up to 3× with exponential backoff |
+
+---
 
 ## Setup (local, no Docker)
 
 ```bash
+cd agentcore
+
 # Python 3.12 required
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 
-# Configure environment
+# Environment (copy from root)
 cp ../.env.example ../.env
-# Fill OPENROUTER_API_KEY, DATABASE_URL, REDIS_URL, AGENTCORE_API_KEY
+# Fill: OPENROUTER_API_KEY, DATABASE_URL (asyncpg), REDIS_URL, AGENTCORE_API_KEY
 
 # Run migrations
 alembic upgrade head
 
-# Start server
+# Start API server
 uvicorn agentcore.main:app --reload --port 8000
+
+# Start background worker (second terminal)
+arq agentcore.worker.WorkerSettings
 ```
 
-## Architecture
-
-```
-POST /api/v1/agents/run → ARQ queue → LangGraph StateGraph
-                                           ↓
-                                   planner  (decompose goal into tasks)
-                                           ↓
-                                   executor (run tool, check guardrails)
-                                           ↓
-                                   validator (synthesize answer / retry)
-```
-
-The graph is async and runs in a background ARQ worker. Results stream via Redis pub/sub to the WebSocket endpoint.
-
-## Guardrails
-
-- **Budget**: `budget_usd` per run — aborts if `cost_usd` exceeded
-- **Iterations**: default max 10 — prevents loops
-- **Scope**: blocks `localhost`, `169.254.169.254`, `*.internal`
-- **Kill switch**: `POST /stop` sets a Redis cancel key; executor checks it every iteration
-- **Retry**: `tenacity` retries LLM calls up to 3× with exponential backoff on 429/5xx
+---
 
 ## Tests
 
 ```bash
-pytest                              # all tests (64 tests · 90% coverage)
-pytest tests/unit/                  # unit tests only (no network)
-pytest tests/integration/           # integration tests (needs DB + Redis)
-pytest --cov=agentcore --cov-report=html  # with HTML coverage report
+pytest                                          # all 64 tests
+pytest tests/unit/                              # unit tests only (no network)
+pytest tests/integration/                       # integration (needs running DB + Redis)
+pytest --cov=agentcore --cov-report=html        # coverage report in htmlcov/
+pytest -k "guardrail" -v                        # filter by name
+```
+
+Coverage is enforced at 80% minimum in CI.
+
+Test layout:
+```
+tests/
+├── conftest.py            fixtures — mocked ARQ, mocked DB session, TestClient
+├── unit/
+│   ├── test_agents.py     planner, executor, validator nodes
+│   ├── test_guardrails.py budget, iterations, scope, audit
+│   ├── test_tools.py      http_caller, memory_read/write
+│   ├── test_graph.py      full LangGraph flow (mocked LLM)
+│   ├── test_llm.py        retry logic, cost computation
+│   ├── test_cost_tracking.py token → USD calculation
+│   ├── test_eval.py       adversarial prompts, reliability scoring
+│   └── test_worker.py     ARQ job function
+└── integration/
+    └── test_api_health.py /health + /ready endpoints
 ```

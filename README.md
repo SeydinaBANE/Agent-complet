@@ -49,26 +49,26 @@ make test-ac     # AgentCore only (pytest)
 make test-fr     # FlowRunner only (Vitest)
 ```
 
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture technique détaillée — LangGraph graph, schémas DB, types de nœuds, sécurité, observabilité |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Guide de déploiement — Docker Compose, variables d'environnement, CI/CD, production |
+| [`agentcore/README.md`](agentcore/README.md) | API AgentCore complète — endpoints, outils, guardrails, tests |
+| [`flowrunner/README.md`](flowrunner/README.md) | API FlowRunner complète — types de nœuds, contexte, tests, frontend |
+
 ## Architecture
 
 ```
-agentcore/
-├── agentcore/
-│   ├── api/         REST + WebSocket routes
-│   ├── agents/      LangGraph nodes (planner, executor, validator, guard)
-│   ├── tools/       Agent tools (web_search, http_caller, memory r/w)
-│   ├── guardrails/  Budget, iteration limits, scope blacklist, audit log
-│   ├── memory/      Redis + PostgreSQL persistence
-│   └── eval/        Adversarial test suite + reliability scoring
-└── tests/
-
-flowrunner/
-├── server/
-│   └── src/
-│       ├── routes/  REST API
-│       ├── engine/  Sequential node executor
-│       └── nodes/   http, condition, transform, delay, ai-agent
-└── client/
-    └── src/
-        └── pages/   Editor, Runs, Monitor
+Browser (React + React Flow)
+    │  REST
+    ▼
+FlowRunner Server (Fastify · Node.js 20 · BullMQ)
+    │  POST /api/v1/agents/run
+    ▼
+AgentCore (FastAPI · Python 3.12 · LangGraph · ARQ)
+    │
+    ├── PostgreSQL  (runs, actions, workflows, run_steps)
+    └── Redis       (ARQ queue, BullMQ queue, pub/sub stream, agent memory)
 ```
