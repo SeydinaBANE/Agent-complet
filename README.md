@@ -16,22 +16,22 @@ Two integrated projects demonstrating full-stack agentic AI development.
 ```bash
 # 1. Clone and copy environment config
 cp .env.example .env
-# Fill in OPENROUTER_API_KEY, AGENTCORE_API_KEY, FLOWRUNNER_API_KEY
+# Fill in OPENROUTER_API_KEY then generate API keys:
+# openssl rand -hex 32  (run twice — once for AGENTCORE_API_KEY, once for FLOWRUNNER_API_KEY)
 
-# 2. Install local dev dependencies
+# 2. Install local dev dependencies (Python, Node, pre-commit hooks)
 make install
 
-# 3. Start all services
+# 3. Start all services — migrations run automatically on startup
 make up
 
-# 4. Run database migrations
-make migrate
-
-# 5. Open
+# 4. Open
 # AgentCore API docs → http://localhost:8000/docs
 # FlowRunner API    → http://localhost:3001/documentation
 # React editor      → http://localhost:5173
 ```
+
+> **Note:** `AGENTCORE_ORIGIN` in `.env` must be `http://agentcore:8000` when running via Docker Compose, or `http://localhost:8000` for local dev (without Docker).
 
 ## Development
 

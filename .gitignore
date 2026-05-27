@@ -43,3 +43,11 @@ Thumbs.db
 
 # Docker
 *.override.yml
+.gstack/
+
+# Compiled JS artifacts in src/ (Vite/tsc side-effect)
+flowrunner/client/src/**/*.js
+!flowrunner/client/src/vite-env.d.ts
+
+# Test screenshots
+*.png

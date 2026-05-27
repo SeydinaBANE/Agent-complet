@@ -9,14 +9,19 @@ export async function executeAiAgentNode(
   ctx: WorkflowContext,
   _runId: string,
 ): Promise<WorkflowContext> {
-  const { goal_template, model, max_iterations = 5, budget_usd = 0.05 } = node.data as {
-    goal_template: string;
+  const { goal_template, goal: goalRaw, model, max_iterations = 5, budget_usd = 0.05, allowed_tools } = node.data as {
+    goal_template?: string;
+    goal?: string;
     model?: string;
     max_iterations?: number;
     budget_usd?: number;
+    allowed_tools?: string[];
   };
 
-  const goal = goal_template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+  const rawGoal = goal_template ?? goalRaw;
+  if (!rawGoal) throw new Error("ai-agent node requires a goal or goal_template");
+
+  const goal = rawGoal.replace(/\{\{(\w+)\}\}/g, (_, key) => {
     const val = ctx[key];
     return val !== undefined ? String(val) : `{{${key}}}`;
   });
@@ -27,7 +32,7 @@ export async function executeAiAgentNode(
       "Content-Type": "application/json",
       "X-API-Key": env.AGENTCORE_API_KEY,
     },
-    body: JSON.stringify({ goal, model, max_iterations, budget_usd }),
+    body: JSON.stringify({ goal, model, max_iterations, budget_usd, allowed_tools }),
   });
 
   if (!startResponse.ok) {

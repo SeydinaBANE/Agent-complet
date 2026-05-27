@@ -47,6 +47,7 @@
 - [x] Tests FlowRunner server — engine nœuds + queue (18 tests)
 - [ ] Tests FlowRunner client — composants clés (Vitest + Testing Library)
 - [x] README.md racine (getting started en 5 commandes)
-- [ ] README.md agentcore/ + README.md flowrunner/
+- [x] README.md agentcore/ + README.md flowrunner/
 - [x] OpenAPI docs : `/docs` (FastAPI) + `/documentation` (Fastify Swagger)
-- [ ] `docker compose build` testé end-to-end
+- [x] `docker compose build` testé end-to-end
+- [x] Pipeline FlowRunner → AgentCore validé (nœud `ai-agent` end-to-end)

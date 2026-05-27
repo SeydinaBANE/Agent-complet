@@ -51,9 +51,22 @@ npm run dev          # React on :5173
 The `ai-agent` node sends:
 ```json
 POST http://agentcore:8000/api/v1/agents/run
-{ "goal": "Analyse: {{context.text}}", "max_iterations": 3 }
+{
+  "goal": "Analyse: {{context.text}}",
+  "max_iterations": 3,
+  "allowed_tools": ["web_search"]
+}
 ```
-Then polls `GET /api/v1/agents/{run_id}` every 2s until `status === "completed"` and injects the result into the workflow context.
+Template placeholders (`{{context.key}}`) are resolved against the current workflow context before the request. The node polls `GET /api/v1/agents/{run_id}` every 2s until `status === "completed"`, then injects `{ node-id_run_id, node-id_status }` into the workflow context for downstream nodes.
+
+**Node data fields:**
+| Field | Default | Description |
+|-------|---------|-------------|
+| `goal` | required | Goal string, supports `{{key}}` interpolation |
+| `max_iterations` | `5` | Max agent iterations |
+| `budget_usd` | `0.05` | Cost cap per run |
+| `allowed_tools` | all | Whitelist of tools the agent may use |
+| `model` | server default | OpenRouter model override |
 
 ## Tests
 
