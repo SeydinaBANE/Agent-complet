@@ -56,7 +56,7 @@ jobs:
       - name: Run migrations
         run: cd agentcore && alembic upgrade head
         env:
-          DATABASE_URL: postgresql://postgres:test@localhost:5432/agentcore_test
+          DATABASE_URL: postgresql+asyncpg://postgres:test@localhost:5432/agentcore_test
           REDIS_URL: redis://localhost:6379
           OPENROUTER_API_KEY: test-key
           AGENTCORE_API_KEY: test-key
@@ -64,7 +64,7 @@ jobs:
       - name: Tests
         run: cd agentcore && pytest --cov=agentcore --cov-fail-under=80 --cov-report=xml
         env:
-          DATABASE_URL: postgresql://postgres:test@localhost:5432/agentcore_test
+          DATABASE_URL: postgresql+asyncpg://postgres:test@localhost:5432/agentcore_test
           REDIS_URL: redis://localhost:6379
           OPENROUTER_API_KEY: test-key
           AGENTCORE_API_KEY: test-key
