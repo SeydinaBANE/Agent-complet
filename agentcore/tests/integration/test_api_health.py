@@ -9,7 +9,7 @@ def test_health(client: TestClient) -> None:
 
 def test_run_requires_api_key(client: TestClient) -> None:
     response = client.post("/api/v1/agents/run", json={"goal": "test"})
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 def test_run_accepted_with_api_key(client: TestClient, api_headers: dict) -> None:
