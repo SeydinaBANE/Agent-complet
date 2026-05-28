@@ -1,0 +1,25 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /agentcore
+    schedule:
+      interval: weekly
+    labels: [dependencies, python]
+
+  - package-ecosystem: npm
+    directory: /flowrunner/server
+    schedule:
+      interval: weekly
+    labels: [dependencies, nodejs]
+
+  - package-ecosystem: npm
+    directory: /flowrunner/client
+    schedule:
+      interval: weekly
+    labels: [dependencies, nodejs]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels: [dependencies, github-actions]
