@@ -12,6 +12,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/scripts ./scripts
 # Keep tsx available for migrations at runtime
 RUN npm install tsx
 
