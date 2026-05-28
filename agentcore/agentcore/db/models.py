@@ -38,8 +38,6 @@ class Action(Base):
     tool: Mapped[str | None] = mapped_column(String(50))
     input: Mapped[dict] = mapped_column(JSONB, default=dict)
     output: Mapped[dict | None] = mapped_column(JSONB)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     run: Mapped["Run"] = relationship(back_populates="actions")

@@ -32,18 +32,18 @@ def report_to_html(report: dict[str, Any]) -> str:
     score = report["score"]
     color = "#22c55e" if score >= 80 else "#f59e0b" if score >= 50 else "#ef4444"
     cases_html = "".join(
-        f'<tr><td>{c["category"]}</td><td>{c["input"][:60]}</td>'
+        f"<tr><td>{c['category']}</td><td>{c['input'][:60]}</td>"
         f'<td style="color:{"green" if c["passed"] else "red"}">'
-        f'{"PASS" if c["passed"] else "FAIL"}</td></tr>'
+        f"{'PASS' if c['passed'] else 'FAIL'}</td></tr>"
         for c in report["cases"]
     )
     return f"""<!DOCTYPE html>
-<html><head><title>AgentCore Eval — {report['eval_id']}</title></head>
+<html><head><title>AgentCore Eval — {report["eval_id"]}</title></head>
 <body style="font-family:sans-serif;max-width:800px;margin:40px auto">
 <h1>Eval Report</h1>
-<p>ID: {report['eval_id']} | Generated: {report['generated_at']}</p>
+<p>ID: {report["eval_id"]} | Generated: {report["generated_at"]}</p>
 <h2 style="color:{color}">Score: {score}/100</h2>
-<p>{report['passed']}/{report['total']} tests passed</p>
+<p>{report["passed"]}/{report["total"]} tests passed</p>
 <table border="1" cellpadding="8" style="width:100%;border-collapse:collapse">
 <tr><th>Category</th><th>Input</th><th>Result</th></tr>
 {cases_html}

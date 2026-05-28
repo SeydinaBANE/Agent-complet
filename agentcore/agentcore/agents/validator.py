@@ -27,8 +27,10 @@ def build_validator(model: str) -> ChatOpenAI:
 async def validate_result(task: str, result: Any, model: str, run_id: str) -> dict:
     log.info("validating_result", run_id=run_id, task=task[:80])
     validator = build_validator(model)
-    response = await validator.ainvoke([
-        {"role": "system", "content": VALIDATOR_SYSTEM},
-        {"role": "user", "content": f"Task: {task}\nResult: {str(result)[:500]}"},
-    ])
+    response = await validator.ainvoke(
+        [
+            {"role": "system", "content": VALIDATOR_SYSTEM},
+            {"role": "user", "content": f"Task: {task}\nResult: {str(result)[:500]}"},
+        ]
+    )
     return {"decision": "complete", "reason": response.content}
