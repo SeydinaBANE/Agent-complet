@@ -1,8 +1,8 @@
 # Portfolio Agentic
 
-[![CI](https://github.com/SeydinaBANE/projet-1/actions/workflows/ci.yml/badge.svg)](https://github.com/SeydinaBANE/projet-1/actions/workflows/ci.yml)
-[![CD](https://github.com/SeydinaBANE/projet-1/actions/workflows/cd.yml/badge.svg)](https://github.com/SeydinaBANE/projet-1/actions/workflows/cd.yml)
-[![Security](https://github.com/SeydinaBANE/projet-1/actions/workflows/security.yml/badge.svg)](https://github.com/SeydinaBANE/projet-1/actions/workflows/security.yml)
+[![CI](https://github.com/SeydinaBANE/Agent-complet/actions/workflows/ci.yml/badge.svg)](https://github.com/SeydinaBANE/Agent-complet/actions/workflows/ci.yml)
+[![CD](https://github.com/SeydinaBANE/Agent-complet/actions/workflows/cd.yml/badge.svg)](https://github.com/SeydinaBANE/Agent-complet/actions/workflows/cd.yml)
+[![Security](https://github.com/SeydinaBANE/Agent-complet/actions/workflows/security.yml/badge.svg)](https://github.com/SeydinaBANE/Agent-complet/actions/workflows/security.yml)
 
 Two integrated projects demonstrating full-stack agentic AI development.
 
