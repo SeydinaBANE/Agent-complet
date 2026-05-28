@@ -59,6 +59,7 @@ jobs:
           DATABASE_URL: postgresql://postgres:test@localhost:5432/agentcore_test
           REDIS_URL: redis://localhost:6379
           OPENROUTER_API_KEY: test-key
+          AGENTCORE_API_KEY: test-key
 
       - name: Tests
         run: cd agentcore && pytest --cov=agentcore --cov-fail-under=80 --cov-report=xml
@@ -80,19 +81,19 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: flowrunner/package-lock.json
+          cache-dependency-path: flowrunner/server/package-lock.json
 
       - name: Install server deps
-        run: cd flowrunner && npm ci
+        run: cd flowrunner/server && npm ci
 
       - name: Lint
-        run: cd flowrunner && npm run lint
+        run: cd flowrunner/server && npm run lint
 
       - name: Type check
-        run: cd flowrunner && npm run typecheck
+        run: cd flowrunner/server && npm run typecheck
 
       - name: Tests
-        run: cd flowrunner && npm test
+        run: cd flowrunner/server && npm test
 
       - name: Install client deps
         run: cd flowrunner/client && npm ci
