@@ -16,8 +16,8 @@ BLOCKED_DOMAINS: set[str] = {
 def check_url_scope(url: str, run_id: str) -> None:
     try:
         host = urlparse(url).hostname or ""
-    except Exception:
-        raise ScopeViolationError(f"Invalid URL: {url}")
+    except Exception as exc:
+        raise ScopeViolationError(f"Invalid URL: {url}") from exc
 
     if host in BLOCKED_DOMAINS or host.endswith(".internal"):
         log.warning("scope_violation", run_id=run_id, url=url, host=host)

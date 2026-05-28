@@ -20,7 +20,7 @@ jobs:
         run: docker build -t agentcore-scan:latest ./agentcore
 
       - name: Scan agentcore
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: agentcore-scan:latest
           format: sarif
@@ -39,7 +39,7 @@ jobs:
         run: docker build -t flowrunner-scan:latest ./flowrunner/server
 
       - name: Scan flowrunner
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: flowrunner-scan:latest
           format: sarif
