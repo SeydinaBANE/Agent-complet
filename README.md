@@ -1,5 +1,9 @@
 # Portfolio Agentic
 
+[![CI](https://github.com/SeydinaBANE/projet-1/actions/workflows/ci.yml/badge.svg)](https://github.com/SeydinaBANE/projet-1/actions/workflows/ci.yml)
+[![CD](https://github.com/SeydinaBANE/projet-1/actions/workflows/cd.yml/badge.svg)](https://github.com/SeydinaBANE/projet-1/actions/workflows/cd.yml)
+[![Security](https://github.com/SeydinaBANE/projet-1/actions/workflows/security.yml/badge.svg)](https://github.com/SeydinaBANE/projet-1/actions/workflows/security.yml)
+
 Two integrated projects demonstrating full-stack agentic AI development.
 
 ## Projects
@@ -54,7 +58,7 @@ make test-fr     # FlowRunner only (Vitest)
 | Document | Description |
 |----------|-------------|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture technique détaillée — LangGraph graph, schémas DB, types de nœuds, sécurité, observabilité |
-| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Guide de déploiement — Docker Compose, variables d'environnement, CI/CD, production |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Guide de déploiement — Docker Compose, variables d'environnement, CI/CD (lint → test → push GHCR → Trivy), production |
 | [`agentcore/README.md`](agentcore/README.md) | API AgentCore complète — endpoints, outils, guardrails, tests |
 | [`flowrunner/README.md`](flowrunner/README.md) | API FlowRunner complète — types de nœuds, contexte, tests, frontend |
 

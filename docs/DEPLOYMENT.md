@@ -262,24 +262,53 @@ Les fichiers SQL se trouvent dans `flowrunner/server/migrations/`. Chaque fichie
 
 ## CI/CD (GitHub Actions)
 
-Le fichier `.github/workflows/ci.yml` définit 3 jobs :
+Trois workflows plus Dependabot :
+
+### `ci.yml` — déclenché sur push `main`/`develop` et PR vers `main`
 
 ```
-push/PR → main
-       │
-       ├── agentcore (Python)
-       │     lint (ruff) → format check → type check (mypy) → migrations → pytest (≥80% coverage)
-       │
-       ├── flowrunner (Node.js)
-       │     lint (ESLint) → type check (tsc) → vitest → build client
-       │
-       └── docker-build (après agentcore + flowrunner)
-             docker compose build
+push / PR → main
+          │
+          ├── agentcore (Python)
+          │     lint (ruff) → format check → type check (mypy) → migrations → pytest (≥80% coverage)
+          │
+          ├── flowrunner (Node.js)
+          │     lint (ESLint) → type check (tsc) → vitest → build client
+          │
+          └── docker-build  (après agentcore + flowrunner)
+                docker compose build
 ```
 
 **Branch protection `main` :** merge bloqué si un job est rouge.
 
-Pour lancer la CI localement :
+### `cd.yml` — déclenché sur push `main` uniquement
+
+Build et push des images Docker vers GitHub Container Registry (GHCR) :
+
+```
+ghcr.io/<owner>/projet-1/agentcore:latest   (+ tag SHA)
+ghcr.io/<owner>/projet-1/flowrunner:latest  (+ tag SHA)
+```
+
+Aucun secret à configurer — utilise `GITHUB_TOKEN` automatiquement.
+
+Pour déployer la dernière version sur un serveur :
+
+```bash
+docker pull ghcr.io/<owner>/projet-1/agentcore:latest
+docker pull ghcr.io/<owner>/projet-1/flowrunner:latest
+docker compose up -d
+```
+
+### `security.yml` — déclenché sur push `main` + chaque lundi à 8h UTC
+
+Scan Trivy des deux images (CRITICAL + HIGH). Les résultats sont visibles dans l'onglet **Security → Code scanning** du repo GitHub. Le pipeline ne bloque pas sur les CVE des images de base (incontournables), mais les signale.
+
+### Dependabot
+
+PRs de mise à jour automatiques chaque semaine pour `pip` (agentcore), `npm` (server + client), et les actions GitHub.
+
+### Lancer la CI localement
 
 ```bash
 # Installer les hooks pre-commit (lint + types avant chaque commit)

@@ -4,7 +4,10 @@
 - [x] Scaffolding monorepo (dossiers, .gitignore, docker-compose.yml)
 - [x] .env.example avec toutes les variables
 - [x] CLAUDE.md, Makefile, .pre-commit-config.yaml
-- [x] GitHub Actions CI
+- [x] GitHub Actions CI (lint → typecheck → migrations → tests → docker build)
+- [x] GitHub Actions CD (build + push images GHCR sur merge main)
+- [x] GitHub Actions Security (Trivy scan weekly + sur push main)
+- [x] Dependabot (pip + npm + github-actions, weekly)
 - [x] scripts/init-db.sql
 - [x] AgentCore : FastAPI skeleton + `/health` + `/ready`
 - [x] AgentCore : config pydantic-settings + validation au démarrage
