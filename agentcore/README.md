@@ -8,7 +8,7 @@ Python 3.12 · FastAPI · LangGraph · OpenRouter · PostgreSQL · Redis · ARQ 
 
 ## API
 
-All routes under `/api/v1/`. Authentication: `X-API-Key` header (required on every request).
+All routes under `/api/v1/`. Authentication: `X-API-Key` header (required on every request). Missing or invalid key returns `401`.
 
 ### Agent runs
 

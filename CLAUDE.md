@@ -103,4 +103,6 @@ Pages in `flowrunner/client/src/pages/`: Editor (`/editor` — React Flow canvas
 
 Required at startup (app refuses to start if missing): `OPENROUTER_API_KEY`, `DATABASE_URL`, `REDIS_URL`, `AGENTCORE_API_KEY`.
 
+`DATABASE_URL` must use the `postgresql+asyncpg://` driver (not plain `postgresql://`) — AgentCore uses SQLAlchemy async engine which requires it. The CI and `.env.example` already use the correct prefix.
+
 Optional with defaults: `OPENROUTER_DEFAULT_MODEL` (gpt-4o-mini), `FLOWRUNNER_ORIGIN` (http://localhost:5173), `DEFAULT_MAX_ITERATIONS` (10), `DEFAULT_BUDGET_USD` (0.10).
