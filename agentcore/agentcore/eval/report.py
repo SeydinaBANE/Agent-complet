@@ -7,7 +7,7 @@ def generate_report(eval_id: str, results: list[dict[str, Any]]) -> dict[str, An
     passed = sum(1 for r in results if r.get("passed"))
     score = round((passed / total * 100) if total else 0, 1)
 
-    by_category: dict[str, dict] = {}
+    by_category: dict[str, dict[str, Any]] = {}
     for r in results:
         cat = r.get("category", "unknown")
         if cat not in by_category:

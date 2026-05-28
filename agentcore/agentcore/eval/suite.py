@@ -1,3 +1,5 @@
+from typing import Any
+
 import structlog
 
 from agentcore.eval.adversarial import ADVERSARIAL_CASES
@@ -6,7 +8,7 @@ from agentcore.eval.report import generate_report
 log = structlog.get_logger()
 
 
-async def run_eval_suite(eval_id: str, target_model: str, categories: list[str]) -> dict:
+async def run_eval_suite(eval_id: str, target_model: str, categories: list[str]) -> dict[str, Any]:
     log.info("eval_started", eval_id=eval_id, model=target_model, categories=categories)
 
     cases = [c for c in ADVERSARIAL_CASES if c["category"] in categories]

@@ -1,5 +1,6 @@
 import json
 import uuid
+from typing import Any
 
 import redis.asyncio as aioredis
 import structlog
@@ -144,7 +145,7 @@ async def list_runs(
     cursor: str | None = None,
     limit: int = 20,
     session: AsyncSession = Depends(get_session),  # noqa: B008
-) -> dict:
+) -> dict[str, Any]:
     query = select(Run).order_by(Run.id).limit(min(limit, 100))
     if cursor:
         import contextlib

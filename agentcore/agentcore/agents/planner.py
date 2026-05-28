@@ -4,7 +4,7 @@ from agentcore.config import settings
 
 
 def build_planner(model: str) -> ChatOpenAI:
-    return ChatOpenAI(
+    return ChatOpenAI(  # type: ignore[call-arg]
         model=model,
         openai_api_key=settings.openrouter_api_key,
         openai_api_base=settings.openrouter_base_url,

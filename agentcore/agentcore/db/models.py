@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import DECIMAL, UUID, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -36,8 +37,8 @@ class Action(Base):
     run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("runs.id"), nullable=False)
     agent: Mapped[str] = mapped_column(String(50), nullable=False)
     tool: Mapped[str | None] = mapped_column(String(50))
-    input: Mapped[dict] = mapped_column(JSONB, default=dict)
-    output: Mapped[dict | None] = mapped_column(JSONB)
+    input: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    output: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     run: Mapped["Run"] = relationship(back_populates="actions")

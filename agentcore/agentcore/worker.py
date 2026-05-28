@@ -63,7 +63,7 @@ async def run_agent_job(
         final_state: AgentState = await graph.ainvoke(initial_state)
     except Exception as exc:
         log.error("job_failed", run_id=run_id, error=str(exc))
-        final_state = {**initial_state, "status": "failed", "error": str(exc)}  # type: ignore[assignment]
+        final_state = {**initial_state, "status": "failed", "error": str(exc)}
 
     async with SessionLocal() as session:
         await session.execute(

@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI) -> Any:
     log.info("startup_complete")
     yield
     # Shutdown
-    await arq_pool.aclose()
+    await arq_pool.aclose()  # type: ignore[attr-defined]
     await engine.dispose()
     log.info("shutdown_complete")
 
@@ -43,7 +43,7 @@ app = FastAPI(
 )
 
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 app.add_middleware(
     CORSMiddleware,

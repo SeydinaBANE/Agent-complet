@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter, Depends
 
 from agentcore.api.deps import require_api_key
@@ -13,5 +15,5 @@ AVAILABLE_TOOLS = [
 
 
 @router.get("/tools", dependencies=[Depends(require_api_key)])
-async def list_tools() -> list[dict]:
+async def list_tools() -> list[dict[str, Any]]:
     return AVAILABLE_TOOLS

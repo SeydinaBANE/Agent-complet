@@ -16,7 +16,7 @@ Respond as JSON: {"decision": "complete|retry|fail", "reason": "..."}"""
 
 
 def build_validator(model: str) -> ChatOpenAI:
-    return ChatOpenAI(
+    return ChatOpenAI(  # type: ignore[call-arg]
         model=model,
         openai_api_key=settings.openrouter_api_key,
         openai_api_base=settings.openrouter_base_url,
@@ -24,7 +24,7 @@ def build_validator(model: str) -> ChatOpenAI:
     )
 
 
-async def validate_result(task: str, result: Any, model: str, run_id: str) -> dict:
+async def validate_result(task: str, result: Any, model: str, run_id: str) -> dict[str, Any]:
     log.info("validating_result", run_id=run_id, task=task[:80])
     validator = build_validator(model)
     response = await validator.ainvoke(
