@@ -13,7 +13,7 @@ jobs:
       packages: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Lowercase repository name
         run: echo "REPO_LOWER=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
