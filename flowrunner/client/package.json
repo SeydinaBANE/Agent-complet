@@ -13,14 +13,14 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "react": "^18.3",
+    "react": "^19.2",
     "react-dom": "^18.3",
     "reactflow": "^11.11",
     "react-router-dom": "^6.24",
     "@tanstack/react-query": "^5.45"
   },
   "devDependencies": {
-    "@types/react": "^18.3",
+    "@types/react": "^19.2",
     "@types/react-dom": "^18.3",
     "@typescript-eslint/eslint-plugin": "^7.0",
     "@typescript-eslint/parser": "^7.0",
