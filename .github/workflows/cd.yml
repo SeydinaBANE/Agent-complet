@@ -26,7 +26,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push agentcore
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: ./agentcore
           push: true
@@ -35,7 +35,7 @@ jobs:
             ghcr.io/${{ env.REPO_LOWER }}/agentcore:${{ github.sha }}
 
       - name: Build and push flowrunner
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: ./flowrunner/server
           push: true
