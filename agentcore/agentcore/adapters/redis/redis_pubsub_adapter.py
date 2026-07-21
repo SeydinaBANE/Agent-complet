@@ -2,7 +2,7 @@ import json
 from collections.abc import AsyncGenerator
 from typing import Any
 
-import redis.asyncio as aioredis
+from agentcore.adapters.redis.connection import get_redis_pool
 
 _CHANNEL = "run:{run_id}"
 
@@ -13,14 +13,13 @@ class RedisPubSubAdapter:
 
     async def publish(self, run_id: str, event: dict[str, Any]) -> None:
         try:
-            r = aioredis.from_url(self._redis_url)
+            r = await get_redis_pool(self._redis_url)
             await r.publish(_CHANNEL.format(run_id=run_id), str(event))
-            await r.aclose()  # type: ignore[attr-defined]
         except Exception:
             pass  # stream failure must not break the agent
 
     async def subscribe(self, run_id: str) -> AsyncGenerator[dict[str, Any], None]:
-        r = aioredis.from_url(self._redis_url)
+        r = await get_redis_pool(self._redis_url)
         pubsub = r.pubsub()
         try:
             await pubsub.subscribe(_CHANNEL.format(run_id=run_id))
@@ -32,4 +31,3 @@ class RedisPubSubAdapter:
                         yield {"raw": str(message["data"])}
         finally:
             await pubsub.unsubscribe()
-            await r.aclose()  # type: ignore[attr-defined]
