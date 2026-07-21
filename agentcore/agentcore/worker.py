@@ -1,12 +1,9 @@
-import uuid
-from datetime import UTC, datetime
-from decimal import Decimal
 from typing import Any
 
 import structlog
 from arq.connections import RedisSettings
-from sqlalchemy import update
 
+from agentcore.adapters.db.sqlalchemy_run_repository import SqlAlchemyRunRepository
 from agentcore.adapters.http.httpx_client_adapter import HttpxClientAdapter
 from agentcore.adapters.langgraph.graph_factory import build_graph
 from agentcore.adapters.llm.openrouter_llm_adapter import OpenRouterLlmAdapter
@@ -21,7 +18,6 @@ from agentcore.adapters.tools.web_search_tool_adapter import WebSearchToolAdapte
 from agentcore.application.services.agent_orchestrator import AgentOrchestrator
 from agentcore.application.services.tool_execution_service import ToolExecutionService
 from agentcore.config import Settings, settings
-from agentcore.db.models import Run
 from agentcore.db.session import SessionLocal
 from agentcore.domain.entities import AgentState
 from agentcore.ports.tool_port import ToolPort
@@ -56,12 +52,7 @@ async def run_agent_job(
     log.info("job_started", run_id=run_id)
 
     async with SessionLocal() as session:
-        await session.execute(
-            update(Run)
-            .where(Run.id == uuid.UUID(run_id))
-            .values(status="running", started_at=datetime.now(UTC))
-        )
-        await session.commit()
+        await SqlAlchemyRunRepository(session).mark_running(run_id)
 
     llm = OpenRouterLlmAdapter(
         api_key=settings.openrouter_api_key, base_url=settings.openrouter_base_url
@@ -97,20 +88,15 @@ async def run_agent_job(
         final_state = {**initial_state, "status": "failed", "error": str(exc)}
 
     async with SessionLocal() as session:
-        await session.execute(
-            update(Run)
-            .where(Run.id == uuid.UUID(run_id))
-            .values(
-                status=final_state.get("status", "failed"),
-                finished_at=datetime.now(UTC),
-                iteration_count=final_state.get("iteration_count", 0),
-                input_tokens=final_state.get("input_tokens", 0),
-                output_tokens=final_state.get("output_tokens", 0),
-                cost_usd=Decimal(str(final_state.get("cost_usd", 0))),
-                error=final_state.get("error"),
-            )
+        await SqlAlchemyRunRepository(session).mark_finished(
+            run_id,
+            status=final_state.get("status", "failed"),
+            iteration_count=final_state.get("iteration_count", 0),
+            input_tokens=final_state.get("input_tokens", 0),
+            output_tokens=final_state.get("output_tokens", 0),
+            cost_usd=final_state.get("cost_usd", 0),
+            error=final_state.get("error"),
         )
-        await session.commit()
 
     log.info("job_finished", run_id=run_id, status=final_state.get("status"))
     return {"run_id": run_id, "status": final_state.get("status")}

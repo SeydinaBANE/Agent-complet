@@ -1,4 +1,3 @@
-import uuid
 from typing import Any
 
 import redis.asyncio as aioredis
@@ -13,15 +12,13 @@ from fastapi import (
     status,
 )
 from pydantic import BaseModel, Field
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentcore.adapters.redis.redis_pubsub_adapter import RedisPubSubAdapter
-from agentcore.api.deps import require_api_key
+from agentcore.api.deps import get_agent_run_service, require_api_key
+from agentcore.application.services.agent_run_service import AgentRunService
 from agentcore.application.services.run_stream_service import RunStreamService
 from agentcore.config import settings
-from agentcore.db.models import Run
-from agentcore.db.session import get_session
+from agentcore.domain.errors import RunNotFoundError
 
 log = structlog.get_logger()
 router = APIRouter(tags=["agents"])
@@ -31,13 +28,11 @@ _CANCEL_KEY = "run:cancel:{run_id}"
 
 class AgentRunRequest(BaseModel):
     goal: str = Field(..., min_length=1, max_length=2000)
-    model: str = Field(default_factory=lambda: settings.openrouter_default_model)
-    max_iterations: int = Field(
-        default_factory=lambda: settings.default_max_iterations, ge=1, le=50
-    )
-    max_tokens: int = Field(default_factory=lambda: settings.default_max_tokens, ge=100, le=32000)
-    budget_usd: float = Field(default_factory=lambda: settings.default_budget_usd, gt=0, le=10.0)
-    tools: list[str] = Field(default=["web_search", "http_caller", "memory_read", "memory_write"])
+    model: str | None = None
+    max_iterations: int | None = Field(default=None, ge=1, le=50)
+    max_tokens: int | None = Field(default=None, ge=100, le=32000)
+    budget_usd: float | None = Field(default=None, gt=0, le=10.0)
+    tools: list[str] | None = None
 
 
 class AgentRunResponse(BaseModel):
@@ -66,34 +61,30 @@ class RunStatus(BaseModel):
 async def start_run(
     body: AgentRunRequest,
     request: Request,
-    session: AsyncSession = Depends(get_session),  # noqa: B008
+    service: AgentRunService = Depends(get_agent_run_service),  # noqa: B008
 ) -> AgentRunResponse:
-    run_id = str(uuid.uuid4())
-
-    # Persist run as pending
-    run = Run(
-        id=uuid.UUID(run_id),
-        goal=body.goal,
-        model=body.model,
-        status="pending",
-    )
-    session.add(run)
-    await session.commit()
-
-    # Enqueue ARQ job
-    await request.app.state.arq.enqueue_job(
-        "run_agent_job",
-        run_id=run_id,
+    plan = await service.start_run(
         goal=body.goal,
         model=body.model,
         max_iterations=body.max_iterations,
-        budget_usd=body.budget_usd,
         max_tokens=body.max_tokens,
-        allowed_tools=body.tools,
+        budget_usd=body.budget_usd,
+        tools=body.tools,
     )
 
-    log.info("run_enqueued", run_id=run_id, goal=body.goal[:80])
-    return AgentRunResponse(run_id=run_id, status="pending")
+    await request.app.state.arq.enqueue_job(
+        "run_agent_job",
+        run_id=plan.run_id,
+        goal=plan.goal,
+        model=plan.model,
+        max_iterations=plan.max_iterations,
+        budget_usd=plan.budget_usd,
+        max_tokens=plan.max_tokens,
+        allowed_tools=plan.tools,
+    )
+
+    log.info("run_enqueued", run_id=plan.run_id, goal=plan.goal[:80])
+    return AgentRunResponse(run_id=plan.run_id, status="pending")
 
 
 @router.get(
@@ -103,15 +94,15 @@ async def start_run(
 )
 async def get_run(
     run_id: str,
-    session: AsyncSession = Depends(get_session),  # noqa: B008
+    service: AgentRunService = Depends(get_agent_run_service),  # noqa: B008
 ) -> RunStatus:
-    result = await session.execute(select(Run).where(Run.id == uuid.UUID(run_id)))
-    run = result.scalar_one_or_none()
-    if not run:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+    try:
+        run = await service.get_run(run_id)
+    except RunNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     return RunStatus(
-        run_id=str(run.id),
+        run_id=run.id,
         status=run.status,
         goal=run.goal,
         model=run.model,
@@ -144,21 +135,13 @@ async def stop_run(run_id: str) -> None:
 async def list_runs(
     cursor: str | None = None,
     limit: int = 20,
-    session: AsyncSession = Depends(get_session),  # noqa: B008
+    service: AgentRunService = Depends(get_agent_run_service),  # noqa: B008
 ) -> dict[str, Any]:
-    query = select(Run).order_by(Run.id).limit(min(limit, 100))
-    if cursor:
-        import contextlib
-
-        with contextlib.suppress(ValueError):
-            query = query.where(Run.id > uuid.UUID(cursor))
-
-    result = await session.execute(query)
-    runs = result.scalars().all()
+    runs, next_cursor = await service.list_runs(cursor, limit)
 
     data = [
         {
-            "run_id": str(r.id),
+            "run_id": r.id,
             "status": r.status,
             "goal": r.goal[:100],
             "model": r.model,
@@ -167,7 +150,6 @@ async def list_runs(
         }
         for r in runs
     ]
-    next_cursor = str(runs[-1].id) if len(runs) == limit else None
     return {"data": data, "next_cursor": next_cursor}
 
 

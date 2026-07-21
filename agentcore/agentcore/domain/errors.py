@@ -12,3 +12,7 @@ class ScopeViolationError(Exception):
 
 class ToolNotFoundError(Exception):
     pass
+
+
+class RunNotFoundError(Exception):
+    pass

@@ -1,3 +1,6 @@
+from dataclasses import dataclass
+from datetime import datetime
+from decimal import Decimal
 from typing import Any, TypedDict
 
 
@@ -41,3 +44,17 @@ class AgentState(TypedDict):
     final_answer: str | None
     error: str | None
     status: str  # running | completed | failed | killed
+
+
+@dataclass(frozen=True)
+class RunRecord:
+    id: str
+    goal: str
+    model: str
+    status: str
+    iteration_count: int
+    input_tokens: int
+    output_tokens: int
+    cost_usd: Decimal
+    error: str | None
+    started_at: datetime | None
