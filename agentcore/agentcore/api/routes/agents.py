@@ -1,4 +1,3 @@
-import json
 import uuid
 from typing import Any
 
@@ -17,7 +16,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from agentcore.adapters.redis.redis_pubsub_adapter import RedisPubSubAdapter
 from agentcore.api.deps import require_api_key
+from agentcore.application.services.run_stream_service import RunStreamService
 from agentcore.config import settings
 from agentcore.db.models import Run
 from agentcore.db.session import get_session
@@ -25,7 +26,6 @@ from agentcore.db.session import get_session
 log = structlog.get_logger()
 router = APIRouter(tags=["agents"])
 
-_CHANNEL = "run:{run_id}"
 _CANCEL_KEY = "run:cancel:{run_id}"
 
 
@@ -174,25 +174,17 @@ async def list_runs(
 @router.websocket("/agents/{run_id}/stream")
 async def stream_run(websocket: WebSocket, run_id: str) -> None:
     await websocket.accept()
-    r = aioredis.from_url(settings.redis_url)
-    pubsub = r.pubsub()
+    stream_service = RunStreamService(RedisPubSubAdapter(settings.redis_url))
+    log.info("ws_subscribed", run_id=run_id)
+    await websocket.send_json({"type": "subscribed", "run_id": run_id})
+
+    events = stream_service.subscribe(run_id)
     try:
-        await pubsub.subscribe(_CHANNEL.format(run_id=run_id))
-        log.info("ws_subscribed", run_id=run_id)
-        await websocket.send_json({"type": "subscribed", "run_id": run_id})
-
-        async for message in pubsub.listen():
-            if message["type"] == "message":
-                try:
-                    payload = json.loads(message["data"].replace("'", '"'))
-                except Exception:
-                    payload = {"raw": str(message["data"])}
-                await websocket.send_json(payload)
-                if payload.get("type") in ("completed", "failed"):
-                    break
-
+        async for payload in events:
+            await websocket.send_json(payload)
+            if payload.get("type") in ("completed", "failed"):
+                break
     except WebSocketDisconnect:
         log.info("ws_disconnected", run_id=run_id)
     finally:
-        await pubsub.unsubscribe()
-        await r.aclose()  # type: ignore[attr-defined]
+        await events.aclose()

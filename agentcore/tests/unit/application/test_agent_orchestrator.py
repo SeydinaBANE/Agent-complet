@@ -1,5 +1,5 @@
 from typing import Any, cast
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -31,8 +31,10 @@ def _base_state(**overrides: Any) -> AgentState:
     return cast(AgentState, state)
 
 
-def _orchestrator(llm: AsyncMock, tools: AsyncMock | None = None) -> AgentOrchestrator:
-    return AgentOrchestrator(llm=llm, tools=tools or AsyncMock())
+def _orchestrator(
+    llm: AsyncMock, tools: AsyncMock | None = None, pubsub: AsyncMock | None = None
+) -> AgentOrchestrator:
+    return AgentOrchestrator(llm=llm, tools=tools or AsyncMock(), pubsub=pubsub or AsyncMock())
 
 
 @pytest.mark.asyncio
@@ -43,8 +45,7 @@ async def test_plan_creates_plan_from_llm_response() -> None:
     ]
     llm.chat_json = AsyncMock(return_value=(plan_data, 10, 20))
 
-    with patch("agentcore.application.services.agent_orchestrator._publish", AsyncMock()):
-        result = await _orchestrator(llm).plan(_base_state())
+    result = await _orchestrator(llm).plan(_base_state())
 
     assert len(result["plan"]) == 1
     assert result["plan"][0]["tool"] == "web_search"
@@ -58,10 +59,20 @@ async def test_plan_handles_non_list_llm_response() -> None:
     llm = AsyncMock()
     llm.chat_json = AsyncMock(return_value=({"bad": "response"}, 5, 5))
 
-    with patch("agentcore.application.services.agent_orchestrator._publish", AsyncMock()):
-        result = await _orchestrator(llm).plan(_base_state())
+    result = await _orchestrator(llm).plan(_base_state())
 
     assert len(result["plan"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_plan_publishes_lifecycle_events() -> None:
+    llm = AsyncMock()
+    llm.chat_json = AsyncMock(return_value=([], 1, 1))
+    pubsub = AsyncMock()
+
+    await _orchestrator(llm, pubsub=pubsub).plan(_base_state())
+
+    assert pubsub.publish.call_count == 2
 
 
 @pytest.mark.asyncio
@@ -72,8 +83,7 @@ async def test_execute_task_runs_tool() -> None:
     tools = AsyncMock()
     tools.execute = AsyncMock(return_value=mock_result)
 
-    with patch("agentcore.application.services.agent_orchestrator._publish", AsyncMock()):
-        result = await _orchestrator(AsyncMock(), tools).execute_task(state)
+    result = await _orchestrator(AsyncMock(), tools).execute_task(state)
 
     assert result["current_task_index"] == 1
     assert len(result["results"]) == 1
@@ -87,8 +97,7 @@ async def test_execute_task_handles_tool_failure() -> None:
     tools = AsyncMock()
     tools.execute = AsyncMock(side_effect=RuntimeError("network error"))
 
-    with patch("agentcore.application.services.agent_orchestrator._publish", AsyncMock()):
-        result = await _orchestrator(AsyncMock(), tools).execute_task(state)
+    result = await _orchestrator(AsyncMock(), tools).execute_task(state)
 
     assert result["results"][0]["success"] is False
     assert result["retry_count"] == 1
@@ -108,8 +117,7 @@ async def test_finalize_synthesizes_answer() -> None:
     results = [TaskResult(task="search", tool="web_search", result={"data": "found"}, success=True)]
     state = _base_state(plan=[], current_task_index=0, results=results)
 
-    with patch("agentcore.application.services.agent_orchestrator._publish", AsyncMock()):
-        result = await _orchestrator(llm).finalize(state)
+    result = await _orchestrator(llm).finalize(state)
 
     assert result["final_answer"] == "LangChain is best"
     assert result["status"] == "completed"

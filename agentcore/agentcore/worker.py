@@ -11,6 +11,7 @@ from agentcore.adapters.http.httpx_client_adapter import HttpxClientAdapter
 from agentcore.adapters.langgraph.graph_factory import build_graph
 from agentcore.adapters.llm.openrouter_llm_adapter import OpenRouterLlmAdapter
 from agentcore.adapters.redis.redis_kv_adapter import RedisKvAdapter
+from agentcore.adapters.redis.redis_pubsub_adapter import RedisPubSubAdapter
 from agentcore.adapters.tools.ddgs_web_search_adapter import DdgsWebSearchAdapter
 from agentcore.adapters.tools.http_caller_tool_adapter import HttpCallerToolAdapter
 from agentcore.adapters.tools.memory_read_tool_adapter import MemoryReadToolAdapter
@@ -66,7 +67,8 @@ async def run_agent_job(
         api_key=settings.openrouter_api_key, base_url=settings.openrouter_base_url
     )
     tools = ToolExecutionService(_build_tool_registry(settings))
-    orchestrator = AgentOrchestrator(llm=llm, tools=tools)
+    pubsub = RedisPubSubAdapter(settings.redis_url)
+    orchestrator = AgentOrchestrator(llm=llm, tools=tools, pubsub=pubsub)
     graph = build_graph(orchestrator)
     initial_state = AgentState(
         run_id=run_id,

@@ -5,6 +5,6 @@ from agentcore.application.services.agent_orchestrator import AgentOrchestrator
 
 
 def test_build_graph_returns_compiled() -> None:
-    orchestrator = AgentOrchestrator(llm=AsyncMock(), tools=AsyncMock())
+    orchestrator = AgentOrchestrator(llm=AsyncMock(), tools=AsyncMock(), pubsub=AsyncMock())
     g = build_graph(orchestrator)
     assert g is not None

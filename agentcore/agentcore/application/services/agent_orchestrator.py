@@ -1,11 +1,9 @@
 from decimal import Decimal
 from typing import Any
 
-import redis.asyncio as aioredis
 import structlog
 
 from agentcore.application.services.tool_execution_service import ToolExecutionService
-from agentcore.config import settings
 from agentcore.domain.entities import AgentState, TaskResult
 from agentcore.domain.errors import BudgetExceededError, MaxIterationsError
 from agentcore.domain.prompts import PLANNER_SYSTEM, VALIDATOR_SYSTEM
@@ -14,30 +12,21 @@ from agentcore.domain.services.iteration_policy import check_iterations
 from agentcore.domain.services.plan_parser import parse_plan_response
 from agentcore.domain.services.result_summarizer import summarize_results
 from agentcore.ports.llm_port import LlmPort
+from agentcore.ports.pubsub_port import PubSubPort
 
 log = structlog.get_logger()
 
-_CHANNEL = "run:{run_id}"
-
-
-async def _publish(run_id: str, event: dict[str, Any]) -> None:
-    try:
-        r = aioredis.from_url(settings.redis_url)
-        await r.publish(_CHANNEL.format(run_id=run_id), str(event))
-        await r.aclose()  # type: ignore[attr-defined]
-    except Exception:
-        pass  # stream failure must not break the agent
-
 
 class AgentOrchestrator:
-    def __init__(self, llm: LlmPort, tools: ToolExecutionService) -> None:
+    def __init__(self, llm: LlmPort, tools: ToolExecutionService, pubsub: PubSubPort) -> None:
         self._llm = llm
         self._tools = tools
+        self._pubsub = pubsub
 
     async def plan(self, state: AgentState) -> dict[str, Any]:
         run_id = state["run_id"]
         log.info("planner_start", run_id=run_id, goal=state["goal"][:80])
-        await _publish(run_id, {"type": "planner_start", "goal": state["goal"]})
+        await self._pubsub.publish(run_id, {"type": "planner_start", "goal": state["goal"]})
 
         plan_raw, input_t, output_t = await self._llm.chat_json(
             messages=[
@@ -51,7 +40,7 @@ class AgentOrchestrator:
 
         plan = parse_plan_response(plan_raw, state["goal"])
         cost = compute_cost(input_t, output_t)
-        await _publish(run_id, {"type": "plan_ready", "tasks": len(plan)})
+        await self._pubsub.publish(run_id, {"type": "plan_ready", "tasks": len(plan)})
 
         return {
             "plan": plan,
@@ -72,7 +61,9 @@ class AgentOrchestrator:
 
         task = plan[idx]
         log.info("executor_start", run_id=run_id, task=task["task"][:60], tool=task["tool"])
-        await _publish(run_id, {"type": "tool_call", "tool": task["tool"], "task": task["task"]})
+        await self._pubsub.publish(
+            run_id, {"type": "tool_call", "tool": task["tool"], "task": task["task"]}
+        )
 
         try:
             check_iterations(state["iteration_count"], state["max_iterations"], run_id)
@@ -91,7 +82,9 @@ class AgentOrchestrator:
         task_result = TaskResult(
             task=task["task"], tool=task["tool"], result=result, success=success
         )
-        await _publish(run_id, {"type": "tool_result", "tool": task["tool"], "success": success})
+        await self._pubsub.publish(
+            run_id, {"type": "tool_result", "tool": task["tool"], "success": success}
+        )
 
         return {
             "results": [*state["results"], task_result],
@@ -109,7 +102,7 @@ class AgentOrchestrator:
             return {}
 
         log.info("validator_synthesize", run_id=run_id)
-        await _publish(run_id, {"type": "synthesizing"})
+        await self._pubsub.publish(run_id, {"type": "synthesizing"})
 
         results_summary = summarize_results(state["results"])
 
@@ -131,7 +124,7 @@ class AgentOrchestrator:
         )
 
         cost = compute_cost(input_t, output_t)
-        await _publish(run_id, {"type": "completed", "answer": answer[:200]})
+        await self._pubsub.publish(run_id, {"type": "completed", "answer": answer[:200]})
 
         return {
             "final_answer": answer,
