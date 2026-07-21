@@ -31,8 +31,8 @@ def _base_state(**overrides: Any) -> AgentState:
     return cast(AgentState, state)
 
 
-def _orchestrator(llm: AsyncMock) -> AgentOrchestrator:
-    return AgentOrchestrator(llm=llm)
+def _orchestrator(llm: AsyncMock, tools: AsyncMock | None = None) -> AgentOrchestrator:
+    return AgentOrchestrator(llm=llm, tools=tools or AsyncMock())
 
 
 @pytest.mark.asyncio
@@ -69,15 +69,11 @@ async def test_execute_task_runs_tool() -> None:
     plan = [TaskPlan(task="search", tool="web_search", tool_input={"query": "LLM"})]
     state = _base_state(plan=plan, current_task_index=0)
     mock_result = [{"title": "LangChain", "url": "https://example.com", "snippet": "..."}]
+    tools = AsyncMock()
+    tools.execute = AsyncMock(return_value=mock_result)
 
-    with (
-        patch(
-            "agentcore.application.services.agent_orchestrator.execute_tool",
-            AsyncMock(return_value=mock_result),
-        ),
-        patch("agentcore.application.services.agent_orchestrator._publish", AsyncMock()),
-    ):
-        result = await _orchestrator(AsyncMock()).execute_task(state)
+    with patch("agentcore.application.services.agent_orchestrator._publish", AsyncMock()):
+        result = await _orchestrator(AsyncMock(), tools).execute_task(state)
 
     assert result["current_task_index"] == 1
     assert len(result["results"]) == 1
@@ -88,15 +84,11 @@ async def test_execute_task_runs_tool() -> None:
 async def test_execute_task_handles_tool_failure() -> None:
     plan = [TaskPlan(task="search", tool="web_search", tool_input={"query": "test"})]
     state = _base_state(plan=plan, current_task_index=0)
+    tools = AsyncMock()
+    tools.execute = AsyncMock(side_effect=RuntimeError("network error"))
 
-    with (
-        patch(
-            "agentcore.application.services.agent_orchestrator.execute_tool",
-            AsyncMock(side_effect=RuntimeError("network error")),
-        ),
-        patch("agentcore.application.services.agent_orchestrator._publish", AsyncMock()),
-    ):
-        result = await _orchestrator(AsyncMock()).execute_task(state)
+    with patch("agentcore.application.services.agent_orchestrator._publish", AsyncMock()):
+        result = await _orchestrator(AsyncMock(), tools).execute_task(state)
 
     assert result["results"][0]["success"] is False
     assert result["retry_count"] == 1

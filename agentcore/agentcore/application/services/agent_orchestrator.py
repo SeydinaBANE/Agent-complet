@@ -4,7 +4,7 @@ from typing import Any
 import redis.asyncio as aioredis
 import structlog
 
-from agentcore.agents.executor import execute_tool
+from agentcore.application.services.tool_execution_service import ToolExecutionService
 from agentcore.config import settings
 from agentcore.domain.entities import AgentState, TaskResult
 from agentcore.domain.errors import BudgetExceededError, MaxIterationsError
@@ -30,8 +30,9 @@ async def _publish(run_id: str, event: dict[str, Any]) -> None:
 
 
 class AgentOrchestrator:
-    def __init__(self, llm: LlmPort) -> None:
+    def __init__(self, llm: LlmPort, tools: ToolExecutionService) -> None:
         self._llm = llm
+        self._tools = tools
 
     async def plan(self, state: AgentState) -> dict[str, Any]:
         run_id = state["run_id"]
@@ -80,7 +81,7 @@ class AgentOrchestrator:
             return {"error": str(exc), "status": "failed"}
 
         try:
-            result = await execute_tool(task["tool"], task["tool_input"], run_id=run_id)
+            result = await self._tools.execute(task["tool"], task["tool_input"], run_id)
             success = True
         except Exception as exc:
             log.warning("tool_error", run_id=run_id, tool=task["tool"], error=str(exc))

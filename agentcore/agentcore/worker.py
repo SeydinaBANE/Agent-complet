@@ -7,13 +7,35 @@ import structlog
 from arq.connections import RedisSettings
 from sqlalchemy import update
 
+from agentcore.adapters.http.httpx_client_adapter import HttpxClientAdapter
 from agentcore.adapters.langgraph.graph_factory import build_graph
 from agentcore.adapters.llm.openrouter_llm_adapter import OpenRouterLlmAdapter
+from agentcore.adapters.redis.redis_kv_adapter import RedisKvAdapter
+from agentcore.adapters.tools.ddgs_web_search_adapter import DdgsWebSearchAdapter
+from agentcore.adapters.tools.http_caller_tool_adapter import HttpCallerToolAdapter
+from agentcore.adapters.tools.memory_read_tool_adapter import MemoryReadToolAdapter
+from agentcore.adapters.tools.memory_write_tool_adapter import MemoryWriteToolAdapter
+from agentcore.adapters.tools.tool_registry import StaticToolRegistry
+from agentcore.adapters.tools.web_search_tool_adapter import WebSearchToolAdapter
 from agentcore.application.services.agent_orchestrator import AgentOrchestrator
-from agentcore.config import settings
+from agentcore.application.services.tool_execution_service import ToolExecutionService
+from agentcore.config import Settings, settings
 from agentcore.db.models import Run
 from agentcore.db.session import SessionLocal
 from agentcore.domain.entities import AgentState
+from agentcore.ports.tool_port import ToolPort
+
+
+def _build_tool_registry(cfg: Settings) -> StaticToolRegistry:
+    kv = RedisKvAdapter(cfg.redis_url)
+    tools: dict[str, ToolPort] = {
+        "web_search": WebSearchToolAdapter(DdgsWebSearchAdapter()),
+        "http_caller": HttpCallerToolAdapter(HttpxClientAdapter()),
+        "memory_read": MemoryReadToolAdapter(kv),
+        "memory_write": MemoryWriteToolAdapter(kv),
+    }
+    return StaticToolRegistry(tools)
+
 
 log = structlog.get_logger()
 
@@ -43,7 +65,8 @@ async def run_agent_job(
     llm = OpenRouterLlmAdapter(
         api_key=settings.openrouter_api_key, base_url=settings.openrouter_base_url
     )
-    orchestrator = AgentOrchestrator(llm=llm)
+    tools = ToolExecutionService(_build_tool_registry(settings))
+    orchestrator = AgentOrchestrator(llm=llm, tools=tools)
     graph = build_graph(orchestrator)
     initial_state = AgentState(
         run_id=run_id,

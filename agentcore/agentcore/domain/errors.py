@@ -8,3 +8,7 @@ class MaxIterationsError(Exception):
 
 class ScopeViolationError(Exception):
     pass
+
+
+class ToolNotFoundError(Exception):
+    pass

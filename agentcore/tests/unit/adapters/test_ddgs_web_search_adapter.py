@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agentcore.tools.web_search import search_web
+from agentcore.adapters.tools.ddgs_web_search_adapter import DdgsWebSearchAdapter
 
 
 @pytest.mark.asyncio
@@ -16,8 +16,8 @@ async def test_search_returns_list() -> None:
     mock_ddgs.__exit__ = MagicMock(return_value=False)
     mock_ddgs.text = MagicMock(return_value=mock_results)
 
-    with patch("agentcore.tools.web_search.DDGS", return_value=mock_ddgs):
-        results = await search_web("AI agents", max_results=2)
+    with patch("agentcore.adapters.tools.ddgs_web_search_adapter.DDGS", return_value=mock_ddgs):
+        results = await DdgsWebSearchAdapter().search("AI agents", max_results=2)
 
     assert len(results) == 2
     assert results[0]["title"] == "Result 1"
@@ -32,7 +32,7 @@ async def test_search_empty_results() -> None:
     mock_ddgs.__exit__ = MagicMock(return_value=False)
     mock_ddgs.text = MagicMock(return_value=[])
 
-    with patch("agentcore.tools.web_search.DDGS", return_value=mock_ddgs):
-        results = await search_web("nothing", max_results=5)
+    with patch("agentcore.adapters.tools.ddgs_web_search_adapter.DDGS", return_value=mock_ddgs):
+        results = await DdgsWebSearchAdapter().search("nothing", max_results=5)
 
     assert results == []
