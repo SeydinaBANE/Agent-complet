@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import Any
 
 import pytest
 
@@ -39,6 +40,33 @@ class _FakeRunRepository:
         return list(self.records.values())[:limit]
 
 
+class _FakeQueue:
+    def __init__(self) -> None:
+        self.enqueued: list[dict[str, Any]] = []
+
+    async def enqueue_agent_job(
+        self,
+        run_id: str,
+        goal: str,
+        model: str,
+        max_iterations: int,
+        budget_usd: float,
+        max_tokens: int,
+        allowed_tools: list[str],
+    ) -> None:
+        self.enqueued.append(
+            {
+                "run_id": run_id,
+                "goal": goal,
+                "model": model,
+                "max_iterations": max_iterations,
+                "budget_usd": budget_usd,
+                "max_tokens": max_tokens,
+                "allowed_tools": allowed_tools,
+            }
+        )
+
+
 def _defaults() -> AgentDefaults:
     return AgentDefaults(
         model="openai/gpt-4o-mini",
@@ -51,9 +79,10 @@ def _defaults() -> AgentDefaults:
 
 @pytest.mark.asyncio
 async def test_start_run_uses_defaults_when_unset() -> None:
-    service = AgentRunService(_FakeRunRepository(), _defaults())
+    queue = _FakeQueue()
+    service = AgentRunService(_FakeRunRepository(), queue, _defaults())
 
-    plan = await service.start_run(
+    run_id = await service.start_run(
         goal="find the best Python LLM framework",
         model=None,
         max_iterations=None,
@@ -62,16 +91,18 @@ async def test_start_run_uses_defaults_when_unset() -> None:
         tools=None,
     )
 
-    assert plan.model == "openai/gpt-4o-mini"
-    assert plan.max_iterations == 10
-    assert plan.tools == ["web_search"]
+    assert queue.enqueued[0]["run_id"] == run_id
+    assert queue.enqueued[0]["model"] == "openai/gpt-4o-mini"
+    assert queue.enqueued[0]["max_iterations"] == 10
+    assert queue.enqueued[0]["allowed_tools"] == ["web_search"]
 
 
 @pytest.mark.asyncio
 async def test_start_run_respects_explicit_overrides() -> None:
-    service = AgentRunService(_FakeRunRepository(), _defaults())
+    queue = _FakeQueue()
+    service = AgentRunService(_FakeRunRepository(), queue, _defaults())
 
-    plan = await service.start_run(
+    await service.start_run(
         goal="goal",
         model="openai/gpt-4o",
         max_iterations=5,
@@ -80,14 +111,14 @@ async def test_start_run_respects_explicit_overrides() -> None:
         tools=["http_caller"],
     )
 
-    assert plan.model == "openai/gpt-4o"
-    assert plan.max_iterations == 5
-    assert plan.tools == ["http_caller"]
+    assert queue.enqueued[0]["model"] == "openai/gpt-4o"
+    assert queue.enqueued[0]["max_iterations"] == 5
+    assert queue.enqueued[0]["allowed_tools"] == ["http_caller"]
 
 
 @pytest.mark.asyncio
 async def test_get_run_raises_when_missing() -> None:
-    service = AgentRunService(_FakeRunRepository(), _defaults())
+    service = AgentRunService(_FakeRunRepository(), _FakeQueue(), _defaults())
 
     with pytest.raises(RunNotFoundError):
         await service.get_run("nonexistent")
@@ -96,12 +127,12 @@ async def test_get_run_raises_when_missing() -> None:
 @pytest.mark.asyncio
 async def test_get_run_returns_record() -> None:
     repo = _FakeRunRepository()
-    service = AgentRunService(repo, _defaults())
-    plan = await service.start_run(
+    service = AgentRunService(repo, _FakeQueue(), _defaults())
+    run_id = await service.start_run(
         goal="goal", model=None, max_iterations=None, max_tokens=None, budget_usd=None, tools=None
     )
 
-    run = await service.get_run(plan.run_id)
+    run = await service.get_run(run_id)
 
-    assert run.id == plan.run_id
+    assert run.id == run_id
     assert run.goal == "goal"

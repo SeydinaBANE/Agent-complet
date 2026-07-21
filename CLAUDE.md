@@ -29,7 +29,7 @@ make test-ac     # AgentCore only: cd agentcore && pytest -v
 make test-fr     # FlowRunner only: cd flowrunner/server && npm test (vitest)
 
 # Single test
-cd agentcore && pytest tests/unit/test_agents.py -v
+cd agentcore && pytest tests/unit/domain/test_budget_policy.py -v
 cd agentcore && pytest -m "not slow"         # skip slow tests
 cd flowrunner/server && npx vitest run tests/unit/nodes/http.test.ts
 
@@ -57,23 +57,82 @@ Browser (5173)  →  FlowRunner Server (3001)  →  AgentCore (8000)
                                  BullMQ queue         ARQ queue + pub/sub + memory
 ```
 
-### AgentCore — LangGraph pipeline
+### AgentCore — LangGraph pipeline (Hexagonal Architecture)
 
 Entry: `agentcore/main.py` → FastAPI app with ARQ pool in `app.state.arq`.
 Worker: `agentcore/worker.py` → `WorkerSettings` (max 10 jobs, 300s timeout).
 
-Graph flow (`agentcore/agents/graph.py`): `START → planner → executor → validator → END`
+Graph flow (`agentcore/adapters/langgraph/graph_factory.py`): `START → planner → executor → validator → END`
 
-- **planner** (`agents/planner.py`) — calls LLM to decompose `goal` into `list[TaskPlan]`
-- **executor** (`agents/executor.py`) — runs tools one by one, checks guardrails, publishes Redis events
-- **validator** (`agents/validator.py`) — synthesizes `final_answer`; loops back to executor if tasks remain
-- **state** (`agents/state.py`) — `AgentState` TypedDict carries `run_id`, `goal`, `plan`, `results`, `cost_usd`, `iteration_count`, `status`, etc.
+#### Hexagonal Layers
 
-Tools (`agentcore/tools/`): `web_search` (DuckDuckGo), `http_caller`, `memory_read`, `memory_write` (Redis TTL 24h). All tools accept `**_kwargs` to absorb unknown LLM-generated params.
+**Ports** (`agentcore/ports/`) — Interfaces (Protocol classes):
+- `llm_port.py` — LLM interaction (`chat`, `chat_json`)
+- `tool_port.py` — Tool execution (`name`, `run`)
+- `tool_registry_port.py` — Tool lookup (`get`, `list_tools`)
+- `run_repository_port.py` — Run persistence (`create`, `mark_running`, `mark_finished`, `get_by_id`, `list`)
+- `kv_store_port.py` — Key-value storage (`get`, `set`)
+- `http_client_port.py` — HTTP requests (`request`)
+- `pubsub_port.py` — Pub/sub messaging (`publish`, `subscribe`)
+- `queue_port.py` — Job queue (`enqueue_agent_job`)
+- `web_search_port.py` — Web search (`search`)
+- `audit_port.py` — Audit logging (`log_action`)
 
-Guardrails (`agentcore/guardrails/`): `budget.py` (cost_usd > budget_usd), `iterations.py` (iteration_count >= max_iterations), `scope.py` (blocks localhost/private IPs), `audit.py` (immutable DB log). Kill switch: write `run:cancel:{run_id}` to Redis.
+**Adapters** (`agentcore/adapters/`) — Concrete implementations:
+- `llm/openrouter_llm_adapter.py` — OpenAI SDK via OpenRouter
+- `db/sqlalchemy_run_repository.py` — SQLAlchemy async persistence
+- `db/sqlalchemy_audit_adapter.py` — Audit logging to database
+- `redis/redis_kv_adapter.py` — Redis key-value store (24h TTL)
+- `redis/redis_pubsub_adapter.py` — Redis pub/sub
+- `http/httpx_client_adapter.py` — HTTP client
+- `queue/arq_queue_adapter.py` — ARQ job queue
+- `tools/web_search_tool_adapter.py` — DuckDuckGo search
+- `tools/http_caller_tool_adapter.py` — HTTP caller
+- `tools/memory_read_tool_adapter.py` — Memory read
+- `tools/memory_write_tool_adapter.py` — Memory write
+- `tools/ddgs_web_search_adapter.py` — DuckDuckGo search port
+- `tools/tool_registry.py` — Tool registry
+- `langgraph/graph_factory.py` — LangGraph graph builder
 
-Eval suite (`agentcore/eval/`): `suite.py`, `adversarial.py`, `report.py` — run via `tests/unit/test_eval_suite.py`.
+**Domain** (`agentcore/domain/`) — Business logic:
+- `entities.py` — `TaskPlan`, `TaskResult`, `AgentState`, `RunRecord`
+- `errors.py` — Domain exceptions (`BudgetExceededError`, `MaxIterationsError`, etc.)
+- `prompts.py` — LLM prompt templates
+- `services/budget_policy.py` — Cost computation and budget checking
+- `services/iteration_policy.py` — Iteration limit checking
+- `services/url_scope_policy.py` — URL scope validation
+- `services/graph_transition_policy.py` — Graph routing decisions
+- `services/plan_parser.py` — LLM response parsing
+- `services/result_summarizer.py` — Task result formatting
+- `services/audit_service.py` — Audit logging service
+
+**Application** (`agentcore/application/`) — Use cases:
+- `dto.py` — `AgentDefaults` configuration DTO
+- `services/agent_orchestrator.py` — Core orchestrator (plan, execute, finalize)
+- `services/agent_run_service.py` — Run management (start, list, get)
+- `services/run_stream_service.py` — Event streaming
+- `services/tool_execution_service.py` — Tool execution
+
+**Composition Root**:
+- `api/deps.py` — FastAPI dependency injection
+- `worker.py` — Background job composition
+
+#### Guardrails
+
+- `budget.py` (cost_usd > budget_usd)
+- `iterations.py` (iteration_count >= max_iterations)
+- `scope.py` (blocks localhost/private IPs)
+- `audit.py` (audit logging via AuditService)
+
+Kill switch: write `run:cancel:{run_id}` to Redis via KvStorePort.
+
+#### Tests
+
+Tests mirror hexagonal layers:
+- `tests/unit/domain/` — Domain service tests
+- `tests/unit/adapters/` — Adapter tests
+- `tests/unit/application/` — Application service tests
+- `tests/unit/test_eval_suite.py` — Eval suite tests
 
 ### FlowRunner — workflow engine
 

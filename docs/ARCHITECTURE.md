@@ -39,6 +39,30 @@ PostgreSQL      Redis
 
 ## AgentCore
 
+### Architecture Hexagonale
+
+AgentCore suit l'**architecture hexagonale** (Ports & Adapters) :
+
+```
+Ports (interfaces)  →  Adapters (implémentations concrètes)
+    ↓                         ↓
+Domain (logique métier)  ←  Application (cas d'usage)
+    ↓                         ↓
+Composition Root (assemblage DI)
+```
+
+#### Couches
+
+| Couche | Emplacement | Rôle |
+|--------|-------------|------|
+| **Ports** | `agentcore/ports/` | Interfaces Protocol (LLM, outils, persistance, etc.) |
+| **Adapters** | `agentcore/adapters/` | Implémentations concrètes (OpenRouter, SQLAlchemy, Redis, etc.) |
+| **Domain** | `agentcore/domain/` | Logique métier pure (entités, erreurs, services) |
+| **Application** | `agentcore/application/` | Cas d'usage (orchestrateur, gestion des runs, streaming) |
+| **Composition Root** | `api/deps.py` + `worker.py` | Assemblage et injection des dépendances |
+
+Voir [CLAUDE.md](../CLAUDE.md) pour la structure détaillée des répertoires.
+
 ### LangGraph StateGraph
 
 ```
@@ -90,10 +114,10 @@ START
 
 | Outil | Fichier | Description |
 |-------|---------|-------------|
-| `web_search` | `tools/web_search.py` | DuckDuckGo, max 5 résultats |
-| `http_caller` | `tools/http_caller.py` | GET/POST arbitraire avec headers |
-| `memory_read` | `tools/memory_read.py` | Lecture Redis `agent:memory:{key}` |
-| `memory_write` | `tools/memory_write.py` | Écriture Redis TTL 24h |
+| `web_search` | `adapters/tools/web_search_tool_adapter.py` | DuckDuckGo, max 5 résultats |
+| `http_caller` | `adapters/tools/http_caller_tool_adapter.py` | GET/POST arbitraire avec headers |
+| `memory_read` | `adapters/tools/memory_read_tool_adapter.py` | Lecture Redis `agent:memory:{key}` |
+| `memory_write` | `adapters/tools/memory_write_tool_adapter.py` | Écriture Redis TTL 24h |
 
 Les outils acceptent `**_kwargs` pour absorber les paramètres inconnus générés par le LLM.
 
@@ -101,11 +125,11 @@ Les outils acceptent `**_kwargs` pour absorber les paramètres inconnus génér�
 
 | Guardrail | Fichier | Déclenchement |
 |-----------|---------|---------------|
-| Budget | `guardrails/budget.py` | `cost_usd > budget_usd` → `BudgetExceededError` |
-| Iterations | `guardrails/iterations.py` | `iteration_count >= max_iterations` → `MaxIterationsError` |
-| Scope | `guardrails/scope.py` | URL vers `localhost`, `169.254.169.254`, `*.internal` → `ScopeViolationError` |
-| Audit | `guardrails/audit.py` | Log immuable de chaque action dans la table `actions` |
-| Kill switch | API `POST /stop` | Écrit `run:cancel:{run_id}` dans Redis ; executor vérifie à chaque itération |
+| Budget | `domain/services/budget_policy.py` | `cost_usd > budget_usd` → `BudgetExceededError` |
+| Iterations | `domain/services/iteration_policy.py` | `iteration_count >= max_iterations` → `MaxIterationsError` |
+| Scope | `domain/services/url_scope_policy.py` | URL vers `localhost`, `169.254.169.254`, `*.internal` → `ScopeViolationError` |
+| Audit | `domain/services/audit_service.py` | Log immuable de chaque action dans la table `actions` via `AuditPort` |
+| Kill switch | API `POST /stop` | Écrit `run:cancel:{run_id}` dans Redis via `KvStorePort` ; executor vérifie à chaque itération |
 
 ### File ARQ (background jobs)
 

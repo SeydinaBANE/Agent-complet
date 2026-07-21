@@ -1,24 +1,26 @@
 from typing import Any
 
-import redis.asyncio as aioredis
 import structlog
 from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
-    Request,
     WebSocket,
     WebSocketDisconnect,
     status,
 )
 from pydantic import BaseModel, Field
 
-from agentcore.adapters.redis.redis_pubsub_adapter import RedisPubSubAdapter
-from agentcore.api.deps import get_agent_run_service, require_api_key
+from agentcore.api.deps import (
+    get_agent_run_service,
+    get_kv_store,
+    get_run_stream_service,
+    require_api_key,
+)
 from agentcore.application.services.agent_run_service import AgentRunService
 from agentcore.application.services.run_stream_service import RunStreamService
-from agentcore.config import settings
 from agentcore.domain.errors import RunNotFoundError
+from agentcore.ports.kv_store_port import KvStorePort
 
 log = structlog.get_logger()
 router = APIRouter(tags=["agents"])
@@ -60,10 +62,9 @@ class RunStatus(BaseModel):
 )
 async def start_run(
     body: AgentRunRequest,
-    request: Request,
     service: AgentRunService = Depends(get_agent_run_service),  # noqa: B008
 ) -> AgentRunResponse:
-    plan = await service.start_run(
+    run_id = await service.start_run(
         goal=body.goal,
         model=body.model,
         max_iterations=body.max_iterations,
@@ -72,19 +73,8 @@ async def start_run(
         tools=body.tools,
     )
 
-    await request.app.state.arq.enqueue_job(
-        "run_agent_job",
-        run_id=plan.run_id,
-        goal=plan.goal,
-        model=plan.model,
-        max_iterations=plan.max_iterations,
-        budget_usd=plan.budget_usd,
-        max_tokens=plan.max_tokens,
-        allowed_tools=plan.tools,
-    )
-
-    log.info("run_enqueued", run_id=plan.run_id, goal=plan.goal[:80])
-    return AgentRunResponse(run_id=plan.run_id, status="pending")
+    log.info("run_enqueued", run_id=run_id, goal=body.goal[:80])
+    return AgentRunResponse(run_id=run_id, status="pending")
 
 
 @router.get(
@@ -119,12 +109,11 @@ async def get_run(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(require_api_key)],
 )
-async def stop_run(run_id: str) -> None:
-    r = aioredis.from_url(settings.redis_url)
-    try:
-        await r.set(_CANCEL_KEY.format(run_id=run_id), "1", ex=600)
-    finally:
-        await r.aclose()  # type: ignore[attr-defined]
+async def stop_run(
+    run_id: str,
+    kv: KvStorePort = Depends(get_kv_store),  # noqa: B008
+) -> None:
+    await kv.set(_CANCEL_KEY.format(run_id=run_id), "1", ttl=600)
     log.info("run_stop_requested", run_id=run_id)
 
 
@@ -154,9 +143,12 @@ async def list_runs(
 
 
 @router.websocket("/agents/{run_id}/stream")
-async def stream_run(websocket: WebSocket, run_id: str) -> None:
+async def stream_run(
+    websocket: WebSocket,
+    run_id: str,
+    stream_service: RunStreamService = Depends(get_run_stream_service),  # noqa: B008
+) -> None:
     await websocket.accept()
-    stream_service = RunStreamService(RedisPubSubAdapter(settings.redis_url))
     log.info("ws_subscribed", run_id=run_id)
     await websocket.send_json({"type": "subscribed", "run_id": run_id})
 

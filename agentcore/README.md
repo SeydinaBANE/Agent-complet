@@ -6,6 +6,20 @@ Multi-agent orchestration API — autonomous agents with tools, memory, guardrai
 
 Python 3.12 · FastAPI · LangGraph · OpenRouter · PostgreSQL · Redis · ARQ · Docker
 
+## Architecture
+
+AgentCore follows **Hexagonal Architecture** (Ports & Adapters):
+
+```
+Ports (interfaces)  →  Adapters (implementations)
+    ↓                         ↓
+Domain (business logic)  ←  Application (use cases)
+    ↓                         ↓
+Composition Root (DI wiring)
+```
+
+See [CLAUDE.md](../CLAUDE.md) for detailed directory structure.
+
 ## API
 
 All routes under `/api/v1/`. Authentication: `X-API-Key` header (required on every request). Missing or invalid key returns `401`.
@@ -156,7 +170,7 @@ arq agentcore.worker.WorkerSettings
 ## Tests
 
 ```bash
-pytest                                          # all 64 tests
+pytest                                          # all 83 tests
 pytest tests/unit/                              # unit tests only (no network)
 pytest tests/integration/                       # integration (needs running DB + Redis)
 pytest --cov=agentcore --cov-report=html        # coverage report in htmlcov/
@@ -165,18 +179,39 @@ pytest -k "guardrail" -v                        # filter by name
 
 Coverage is enforced at 80% minimum in CI.
 
-Test layout:
+Test layout mirrors hexagonal layers:
 ```
 tests/
 ├── conftest.py            fixtures — mocked ARQ, mocked DB session, TestClient
 ├── unit/
-│   ├── test_agents.py     planner, executor, validator nodes
-│   ├── test_guardrails.py budget, iterations, scope, audit
-│   ├── test_tools.py      http_caller, memory_read/write
-│   ├── test_graph.py      full LangGraph flow (mocked LLM)
-│   ├── test_llm.py        retry logic, cost computation
-│   ├── test_cost_tracking.py token → USD calculation
+│   ├── domain/            domain service tests
+│   │   ├── test_budget_policy.py
+│   │   ├── test_iteration_policy.py
+│   │   ├── test_url_scope_policy.py
+│   │   ├── test_graph_transition_policy.py
+│   │   ├── test_plan_parser.py
+│   │   ├── test_result_summarizer.py
+│   │   ├── test_prompts.py
+│   │   └── test_audit_service.py
+│   ├── adapters/          adapter tests
+│   │   ├── test_openrouter_llm_adapter.py
+│   │   ├── test_sqlalchemy_run_repository.py
+│   │   ├── test_redis_kv_adapter.py
+│   │   ├── test_redis_pubsub_adapter.py
+│   │   ├── test_httpx_client_adapter.py
+│   │   ├── test_tool_registry.py
+│   │   ├── test_web_search_tool_adapter.py
+│   │   ├── test_http_caller_tool_adapter.py
+│   │   ├── test_memory_tool_adapters.py
+│   │   ├── test_ddgs_web_search_adapter.py
+│   │   └── test_graph_factory.py
+│   ├── application/       application service tests
+│   │   ├── test_agent_orchestrator.py
+│   │   ├── test_agent_run_service.py
+│   │   ├── test_run_stream_service.py
+│   │   └── test_tool_execution_service.py
 │   ├── test_eval.py       adversarial prompts, reliability scoring
+│   ├── test_eval_suite.py
 │   └── test_worker.py     ARQ job function
 └── integration/
     └── test_api_health.py /health + /ready endpoints
