@@ -168,12 +168,11 @@ async def stream_run(
 
     events = stream_service.subscribe(run_id)
     try:
-        async for payload in asyncio.timeout_at(
-            asyncio.get_event_loop().time() + WS_TIMEOUT_SECONDS, events
-        ):
-            await websocket.send_json(payload)
-            if payload.get("type") in ("completed", "failed"):
-                break
+        async with asyncio.timeout(WS_TIMEOUT_SECONDS):
+            async for payload in events:
+                await websocket.send_json(payload)
+                if payload.get("type") in ("completed", "failed"):
+                    break
     except TimeoutError:
         log.info("ws_timeout", run_id=run_id)
         await websocket.send_json({"type": "error", "detail": "Stream timed out"})

@@ -10,8 +10,7 @@ class RedisKvAdapter:
 
     async def get(self, key: str) -> str | None:
         r = await get_redis_pool(self._redis_url)
-        value = await r.get(f"{_KEY_PREFIX}{key}")
-        return value if isinstance(value, str) else value.decode() if value else None
+        return await r.get(f"{_KEY_PREFIX}{key}")
 
     async def set(self, key: str, value: str, ttl: int = DEFAULT_TTL_SECONDS) -> None:
         r = await get_redis_pool(self._redis_url)
