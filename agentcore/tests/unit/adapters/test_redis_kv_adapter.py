@@ -8,10 +8,12 @@ from agentcore.adapters.redis.redis_kv_adapter import RedisKvAdapter
 @pytest.mark.asyncio
 async def test_write_then_read() -> None:
     mock_redis = AsyncMock()
-    mock_redis.get.return_value = b"hello"
+    mock_redis.get.return_value = "hello"
 
     with patch(
-        "agentcore.adapters.redis.redis_kv_adapter.aioredis.from_url", return_value=mock_redis
+        "agentcore.adapters.redis.redis_kv_adapter.get_redis_pool",
+        new_callable=AsyncMock,
+        return_value=mock_redis,
     ):
         value = await RedisKvAdapter("redis://localhost:6379").get("my_key")
 
@@ -25,7 +27,9 @@ async def test_read_missing_key() -> None:
     mock_redis.get.return_value = None
 
     with patch(
-        "agentcore.adapters.redis.redis_kv_adapter.aioredis.from_url", return_value=mock_redis
+        "agentcore.adapters.redis.redis_kv_adapter.get_redis_pool",
+        new_callable=AsyncMock,
+        return_value=mock_redis,
     ):
         value = await RedisKvAdapter("redis://localhost:6379").get("missing")
 
@@ -37,7 +41,9 @@ async def test_set_writes_with_ttl() -> None:
     mock_redis = AsyncMock()
 
     with patch(
-        "agentcore.adapters.redis.redis_kv_adapter.aioredis.from_url", return_value=mock_redis
+        "agentcore.adapters.redis.redis_kv_adapter.get_redis_pool",
+        new_callable=AsyncMock,
+        return_value=mock_redis,
     ):
         await RedisKvAdapter("redis://localhost:6379").set("key", "value", ttl=3600)
 

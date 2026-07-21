@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import redis.asyncio as aioredis
 
-_pool: aioredis.Redis | None = None
+_pool: aioredis.Redis[str] | None = None
 
 
-async def get_redis_pool(redis_url: str) -> aioredis.Redis:
+async def get_redis_pool(redis_url: str) -> aioredis.Redis[str]:
     global _pool
     if _pool is None:
         _pool = aioredis.from_url(

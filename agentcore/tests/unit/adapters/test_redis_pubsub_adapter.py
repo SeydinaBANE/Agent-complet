@@ -10,7 +10,8 @@ async def test_publish_sends_event_on_run_channel() -> None:
     mock_redis = AsyncMock()
 
     with patch(
-        "agentcore.adapters.redis.redis_pubsub_adapter.aioredis.from_url",
+        "agentcore.adapters.redis.redis_pubsub_adapter.get_redis_pool",
+        new_callable=AsyncMock,
         return_value=mock_redis,
     ):
         await RedisPubSubAdapter("redis://localhost:6379").publish("run-1", {"type": "started"})
@@ -23,7 +24,8 @@ async def test_publish_sends_event_on_run_channel() -> None:
 @pytest.mark.asyncio
 async def test_publish_swallows_redis_errors() -> None:
     with patch(
-        "agentcore.adapters.redis.redis_pubsub_adapter.aioredis.from_url",
+        "agentcore.adapters.redis.redis_pubsub_adapter.get_redis_pool",
+        new_callable=AsyncMock,
         side_effect=RuntimeError("connection refused"),
     ):
         await RedisPubSubAdapter("redis://localhost:6379").publish("run-1", {"type": "started"})
@@ -45,7 +47,8 @@ async def test_subscribe_yields_parsed_events() -> None:
     mock_redis.pubsub = MagicMock(return_value=mock_pubsub)
 
     with patch(
-        "agentcore.adapters.redis.redis_pubsub_adapter.aioredis.from_url",
+        "agentcore.adapters.redis.redis_pubsub_adapter.get_redis_pool",
+        new_callable=AsyncMock,
         return_value=mock_redis,
     ):
         events = [
