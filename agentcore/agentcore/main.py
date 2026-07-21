@@ -12,6 +12,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+from agentcore.adapters.http.httpx_client_adapter import close_client as close_http_client
 from agentcore.adapters.redis.connection import close_redis_pool
 from agentcore.api.routes import agents, health, tools
 from agentcore.config import settings
@@ -32,6 +33,7 @@ async def lifespan(app: FastAPI) -> Any:
     # Shutdown
     await arq_pool.aclose()  # type: ignore[attr-defined]
     await close_redis_pool()
+    await close_http_client()
     await engine.dispose()
     log.info("shutdown_complete")
 

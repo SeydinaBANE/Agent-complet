@@ -22,6 +22,9 @@ from agentcore.db.session import SessionLocal
 from agentcore.domain.entities import AgentState
 from agentcore.ports.tool_port import ToolPort
 
+MAX_DB_RETRIES = 3
+RETRY_DELAY_SECONDS = 1
+
 
 def _build_tool_registry(cfg: Settings) -> StaticToolRegistry:
     kv = RedisKvAdapter(cfg.redis_url)
@@ -39,6 +42,30 @@ log = structlog.get_logger()
 _CANCEL_KEY = "run:cancel:{run_id}"
 
 
+async def _mark_running_with_retry(run_id: str) -> None:
+    for attempt in range(MAX_DB_RETRIES):
+        try:
+            async with SessionLocal() as session:
+                await SqlAlchemyRunRepository(session).mark_running(run_id)
+                return
+        except Exception:
+            if attempt == MAX_DB_RETRIES - 1:
+                raise
+            log.warning("db_retry", operation="mark_running", attempt=attempt + 1)
+
+
+async def _mark_finished_with_retry(run_id: str, **kwargs: Any) -> None:
+    for attempt in range(MAX_DB_RETRIES):
+        try:
+            async with SessionLocal() as session:
+                await SqlAlchemyRunRepository(session).mark_finished(run_id, **kwargs)
+                return
+        except Exception:
+            if attempt == MAX_DB_RETRIES - 1:
+                raise
+            log.warning("db_retry", operation="mark_finished", attempt=attempt + 1)
+
+
 async def run_agent_job(
     ctx: dict[str, Any],
     run_id: str,
@@ -51,8 +78,7 @@ async def run_agent_job(
 ) -> dict[str, Any]:
     log.info("job_started", run_id=run_id)
 
-    async with SessionLocal() as session:
-        await SqlAlchemyRunRepository(session).mark_running(run_id)
+    await _mark_running_with_retry(run_id)
 
     llm = OpenRouterLlmAdapter(
         api_key=settings.openrouter_api_key, base_url=settings.openrouter_base_url
@@ -87,16 +113,15 @@ async def run_agent_job(
         log.error("job_failed", run_id=run_id, error=str(exc))
         final_state = {**initial_state, "status": "failed", "error": str(exc)}
 
-    async with SessionLocal() as session:
-        await SqlAlchemyRunRepository(session).mark_finished(
-            run_id,
-            status=final_state.get("status", "failed"),
-            iteration_count=final_state.get("iteration_count", 0),
-            input_tokens=final_state.get("input_tokens", 0),
-            output_tokens=final_state.get("output_tokens", 0),
-            cost_usd=final_state.get("cost_usd", 0),
-            error=final_state.get("error"),
-        )
+    await _mark_finished_with_retry(
+        run_id,
+        status=final_state.get("status", "failed"),
+        iteration_count=final_state.get("iteration_count", 0),
+        input_tokens=final_state.get("input_tokens", 0),
+        output_tokens=final_state.get("output_tokens", 0),
+        cost_usd=final_state.get("cost_usd", 0),
+        error=final_state.get("error"),
+    )
 
     log.info("job_finished", run_id=run_id, status=final_state.get("status"))
     return {"run_id": run_id, "status": final_state.get("status")}
@@ -112,3 +137,5 @@ class WorkerSettings:
     redis_settings = _redis_settings()
     max_jobs = 10
     job_timeout = 300
+    max_tries = 3
+    retry_delay = 10
