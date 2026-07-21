@@ -2,6 +2,8 @@ from urllib.parse import urlparse
 
 import structlog
 
+from agentcore.domain.errors import ScopeViolationError
+
 log = structlog.get_logger()
 
 BLOCKED_DOMAINS: set[str] = {
@@ -22,7 +24,3 @@ def check_url_scope(url: str, run_id: str) -> None:
     if host in BLOCKED_DOMAINS or host.endswith(".internal"):
         log.warning("scope_violation", run_id=run_id, url=url, host=host)
         raise ScopeViolationError(f"URL {url} is in the blocked scope")
-
-
-class ScopeViolationError(Exception):
-    pass

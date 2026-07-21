@@ -2,7 +2,7 @@ from typing import Any
 
 import httpx
 
-from agentcore.guardrails.scope import check_url_scope
+from agentcore.domain.services.url_scope_policy import check_url_scope
 
 DEFAULT_TIMEOUT = 10.0
 

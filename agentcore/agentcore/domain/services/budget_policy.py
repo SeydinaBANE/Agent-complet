@@ -2,6 +2,8 @@ from decimal import Decimal
 
 import structlog
 
+from agentcore.domain.errors import BudgetExceededError
+
 log = structlog.get_logger()
 
 # OpenRouter pricing is per 1M tokens — approximate defaults
@@ -22,7 +24,3 @@ def check_budget(current_cost: Decimal, budget_usd: float, run_id: str) -> None:
         raise BudgetExceededError(
             f"Run {run_id} exceeded budget ${budget_usd:.4f} (spent ${float(current_cost):.4f})"
         )
-
-
-class BudgetExceededError(Exception):
-    pass

@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentcore.guardrails.scope import ScopeViolationError
+from agentcore.domain.errors import ScopeViolationError
 from agentcore.tools.http_caller import call_http
 from agentcore.tools.memory_read import read_memory
 from agentcore.tools.memory_write import write_memory

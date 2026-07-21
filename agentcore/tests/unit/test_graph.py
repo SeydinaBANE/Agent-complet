@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from agentcore.agents.state import AgentState
+from agentcore.domain.entities import AgentState
 
 
 def _base_state(**overrides: Any) -> AgentState:
@@ -70,7 +70,7 @@ async def test_planner_node_handles_non_list_response() -> None:
 @pytest.mark.asyncio
 async def test_executor_node_runs_tool() -> None:
     from agentcore.agents.graph import _executor_node
-    from agentcore.agents.state import TaskPlan
+    from agentcore.domain.entities import TaskPlan
 
     plan = [TaskPlan(task="search", tool="web_search", tool_input={"query": "LLM"})]
     state = _base_state(plan=plan, current_task_index=0)
@@ -91,7 +91,7 @@ async def test_executor_node_runs_tool() -> None:
 @pytest.mark.asyncio
 async def test_executor_node_handles_tool_failure() -> None:
     from agentcore.agents.graph import _executor_node
-    from agentcore.agents.state import TaskPlan
+    from agentcore.domain.entities import TaskPlan
 
     plan = [TaskPlan(task="search", tool="web_search", tool_input={"query": "test"})]
     state = _base_state(plan=plan, current_task_index=0)
@@ -121,7 +121,7 @@ async def test_executor_node_skips_when_all_done() -> None:
 @pytest.mark.asyncio
 async def test_validator_node_synthesizes_answer() -> None:
     from agentcore.agents.graph import _validator_node
-    from agentcore.agents.state import TaskResult
+    from agentcore.domain.entities import TaskResult
 
     results = [TaskResult(task="search", tool="web_search", result={"data": "found"}, success=True)]
     state = _base_state(plan=[], current_task_index=0, results=results)
@@ -139,7 +139,7 @@ async def test_validator_node_synthesizes_answer() -> None:
 @pytest.mark.asyncio
 async def test_validator_node_skips_when_tasks_remain() -> None:
     from agentcore.agents.graph import _validator_node
-    from agentcore.agents.state import TaskPlan
+    from agentcore.domain.entities import TaskPlan
 
     plan = [TaskPlan(task="t", tool="web_search", tool_input={})]
     state = _base_state(plan=plan, current_task_index=0)

@@ -8,10 +8,10 @@ from arq.connections import RedisSettings
 from sqlalchemy import update
 
 from agentcore.agents.graph import build_graph
-from agentcore.agents.state import AgentState
 from agentcore.config import settings
 from agentcore.db.models import Run
 from agentcore.db.session import SessionLocal
+from agentcore.domain.entities import AgentState
 
 log = structlog.get_logger()
 

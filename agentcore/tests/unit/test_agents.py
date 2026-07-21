@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from agentcore.agents.executor import execute_tool
-from agentcore.agents.planner import PLANNER_SYSTEM, build_planner
+from agentcore.domain.prompts import PLANNER_SYSTEM
 
 
 class TestExecutor:
@@ -47,11 +47,6 @@ class TestExecutor:
 
 
 class TestPlanner:
-    def test_build_planner_returns_llm(self) -> None:
-        llm = build_planner("openai/gpt-4o-mini")
-        assert llm is not None
-        assert llm.model_name == "openai/gpt-4o-mini"
-
     def test_planner_system_prompt_contains_tools(self) -> None:
         assert "web_search" in PLANNER_SYSTEM
         assert "http_caller" in PLANNER_SYSTEM
