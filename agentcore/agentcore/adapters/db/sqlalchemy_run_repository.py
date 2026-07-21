@@ -73,10 +73,10 @@ class SqlAlchemyRunRepository:
         return _to_record(run) if run else None
 
     async def list(self, cursor: str | None, limit: int) -> list[RunRecord]:
-        query = select(Run).order_by(Run.id).limit(min(limit, 100))
+        query = select(Run).order_by(Run.created_at.desc()).limit(min(limit, 100))
         if cursor:
             with contextlib.suppress(ValueError):
-                query = query.where(Run.id > uuid.UUID(cursor))
+                query = query.where(Run.id < uuid.UUID(cursor))
 
         result = await self._session.execute(query)
         return [_to_record(run) for run in result.scalars().all()]
