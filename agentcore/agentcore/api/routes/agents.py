@@ -1,5 +1,8 @@
 from typing import Any
 
+import asyncio
+import hmac
+
 import structlog
 from fastapi import (
     APIRouter,
@@ -19,8 +22,11 @@ from agentcore.api.deps import (
 )
 from agentcore.application.services.agent_run_service import AgentRunService
 from agentcore.application.services.run_stream_service import RunStreamService
+from agentcore.config import settings
 from agentcore.domain.errors import RunNotFoundError
 from agentcore.ports.kv_store_port import KvStorePort
+
+WS_TIMEOUT_SECONDS = 1800  # 30 minutes
 
 log = structlog.get_logger()
 router = APIRouter(tags=["agents"])
@@ -126,7 +132,7 @@ async def list_runs(
     limit: int = 20,
     service: AgentRunService = Depends(get_agent_run_service),  # noqa: B008
 ) -> dict[str, Any]:
-    runs, next_cursor = await service.list_runs(cursor, limit)
+    runs, next_cursor = await service.list_runs(cursor, max(1, min(limit, 100)))
 
     data = [
         {
@@ -142,6 +148,13 @@ async def list_runs(
     return {"data": data, "next_cursor": next_cursor}
 
 
+async def _verify_ws_auth(websocket: WebSocket) -> None:
+    token = websocket.query_params.get("token") or websocket.headers.get("x-api-key")
+    if not token or not hmac.compare_digest(str(token), settings.agentcore_api_key):
+        await websocket.close(code=4401, reason="Unauthorized")
+        raise WebSocketDisconnect(code=4401)
+
+
 @router.websocket("/agents/{run_id}/stream")
 async def stream_run(
     websocket: WebSocket,
@@ -149,16 +162,23 @@ async def stream_run(
     stream_service: RunStreamService = Depends(get_run_stream_service),  # noqa: B008
 ) -> None:
     await websocket.accept()
+    await _verify_ws_auth(websocket)
+
     log.info("ws_subscribed", run_id=run_id)
     await websocket.send_json({"type": "subscribed", "run_id": run_id})
 
     events = stream_service.subscribe(run_id)
     try:
-        async for payload in events:
+        async for payload in asyncio.timeout_at(
+            asyncio.get_event_loop().time() + WS_TIMEOUT_SECONDS, events
+        ):
             await websocket.send_json(payload)
             if payload.get("type") in ("completed", "failed"):
                 break
+    except TimeoutError:
+        log.info("ws_timeout", run_id=run_id)
+        await websocket.send_json({"type": "error", "detail": "Stream timed out"})
     except WebSocketDisconnect:
-        log.info("ws_disconnected", run_id=run_id)
+        log.debug("ws_disconnected", run_id=run_id)
     finally:
         await events.aclose()

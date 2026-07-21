@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
+import crypto from "crypto";
 
 import { env } from "./config.js";
 import { sql } from "./db.js";
@@ -14,19 +15,31 @@ import { requireApiKey } from "./middleware/auth.js";
 
 const app = Fastify({ logger: { level: "info" } });
 
-await app.register(cors, { origin: true });
+await app.register(cors, {
+  origin: env.NODE_ENV === "production" ? env.FLOWRUNNER_ORIGIN : true,
+  credentials: true,
+});
 await app.register(rateLimit, { max: 60, timeWindow: "1 minute" });
-await app.register(swagger, {
-  openapi: {
-    info: { title: "FlowRunner", version: "1.0.0" },
-    components: {
-      securitySchemes: {
-        apiKey: { type: "apiKey", name: "x-api-key", in: "header" },
+
+if (env.NODE_ENV !== "production") {
+  await app.register(swagger, {
+    openapi: {
+      info: { title: "FlowRunner", version: "1.0.0" },
+      components: {
+        securitySchemes: {
+          apiKey: { type: "apiKey", name: "x-api-key", in: "header" },
+        },
       },
     },
-  },
+  });
+  await app.register(swaggerUi, { routePrefix: "/documentation" });
+}
+
+app.addHook("preHandler", async (request) => {
+  const requestId = (request.headers["x-request-id"] as string) || crypto.randomUUID();
+  request.id = requestId;
+  request.log = request.log.child({ requestId });
 });
-await app.register(swaggerUi, { routePrefix: "/documentation" });
 
 app.addHook("preHandler", requireApiKey);
 

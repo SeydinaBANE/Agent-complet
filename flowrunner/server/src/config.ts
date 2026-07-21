@@ -6,6 +6,7 @@ export const env = cleanEnv(process.env, {
   FLOWRUNNER_API_KEY: str({ desc: "API key for this service" }),
   AGENTCORE_ORIGIN: url({ default: "http://localhost:8000" }),
   AGENTCORE_API_KEY: str({ desc: "AgentCore API key (for ai-agent node)" }),
+  FLOWRUNNER_ORIGIN: url({ default: "http://localhost:5173", desc: "Allowed CORS origin" }),
   PORT: num({ default: 3001 }),
   NODE_ENV: str({ choices: ["development", "production", "test"], default: "development" }),
 });
