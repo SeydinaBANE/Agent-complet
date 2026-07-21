@@ -1,5 +1,10 @@
 import type { WorkflowContext, WorkflowNode } from "../types.js";
 
+/**
+ * Hostnames that are blocked by the SSRF protection policy.
+ * Includes localhost, link-local addresses, cloud metadata endpoints,
+ * and common internal DNS suffixes.
+ */
 const BLOCKED_HOSTS = new Set([
   "localhost",
   "127.0.0.1",
@@ -10,6 +15,16 @@ const BLOCKED_HOSTS = new Set([
   "instance-data",
 ]);
 
+/**
+ * Check whether a URL should be blocked by the SSRF security policy.
+ *
+ * Blocks: localhost, private IPs (10.x, 172.16-31.x, 192.168.x),
+ * link-local (169.254.x), cloud metadata endpoints, .internal/.local
+ * domains, and non-HTTP(S) protocols.
+ *
+ * @param urlStr - The URL to validate.
+ * @returns True if the URL is blocked, false otherwise.
+ */
 function isUrlBlocked(urlStr: string): boolean {
   try {
     const parsed = new URL(urlStr);
@@ -29,8 +44,21 @@ function isUrlBlocked(urlStr: string): boolean {
   }
 }
 
+/** Maximum time in milliseconds to wait for an HTTP response. */
 const HTTP_TIMEOUT_MS = 30_000;
 
+/**
+ * Execute an HTTP node in a workflow.
+ *
+ * Makes an outbound HTTP request with SSRF protection, a 30-second
+ * timeout, and automatic JSON parsing of the response body.
+ *
+ * @param node - The workflow node containing url, method, headers, body.
+ * @param ctx - The current workflow context (passed through).
+ * @param _runId - The run identifier (unused, required by interface).
+ * @returns Updated context with `{nodeId}_status` and `{nodeId}_body` keys.
+ * @throws Error if the URL is blocked by the security policy or the request times out.
+ */
 export async function executeHttpNode(
   node: WorkflowNode,
   ctx: WorkflowContext,

@@ -1,3 +1,11 @@
+"""Redis pub/sub adapter — PubSubPort implementation.
+
+Publishes real-time agent events (tool calls, status changes, errors)
+on per-run Redis channels. Subscribers receive events as JSON dicts.
+
+Channel naming: ``run:{run_id}``
+"""
+
 import json
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -8,17 +16,37 @@ _CHANNEL = "run:{run_id}"
 
 
 class RedisPubSubAdapter:
+    """PubSubPort backed by Redis pub/sub."""
+
     def __init__(self, redis_url: str) -> None:
         self._redis_url = redis_url
 
     async def publish(self, run_id: str, event: dict[str, Any]) -> None:
+        """Publish an event on the run's channel.
+
+        Args:
+            run_id: Run identifier (determines the channel name).
+            event: Event payload serialized as JSON.
+
+        Errors are silently swallowed — stream failures must not break
+        the agent execution loop.
+        """
         try:
             r = await get_redis_pool(self._redis_url)
             await r.publish(_CHANNEL.format(run_id=run_id), str(event))
         except Exception:
-            pass  # stream failure must not break the agent
+            pass
 
     async def subscribe(self, run_id: str) -> AsyncGenerator[dict[str, Any], None]:
+        """Subscribe to a run's event channel.
+
+        Args:
+            run_id: Run identifier to subscribe to.
+
+        Yields:
+            Parsed JSON event dicts. Malformed messages are wrapped
+            as ``{"raw": "<original>"}``.
+        """
         r = await get_redis_pool(self._redis_url)
         pubsub = r.pubsub()
         try:

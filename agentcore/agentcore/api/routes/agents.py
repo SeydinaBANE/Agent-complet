@@ -1,3 +1,10 @@
+"""Agent routes — FastAPI endpoints for agent run management.
+
+Provides REST endpoints for creating runs, querying status, stopping
+runs (via Redis kill-switch), listing runs with cursor pagination,
+and WebSocket streaming of real-time events.
+"""
+
 import asyncio
 import hmac
 from typing import Any
@@ -34,6 +41,8 @@ _CANCEL_KEY = "run:cancel:{run_id}"
 
 
 class AgentRunRequest(BaseModel):
+    """Request body for POST /agents/run."""
+
     goal: str = Field(..., min_length=1, max_length=2000)
     model: str | None = None
     max_iterations: int | None = Field(default=None, ge=1, le=50)
@@ -43,11 +52,15 @@ class AgentRunRequest(BaseModel):
 
 
 class AgentRunResponse(BaseModel):
+    """Response for POST /agents/run."""
+
     run_id: str
     status: str
 
 
 class RunStatus(BaseModel):
+    """Detailed status of a single agent run."""
+
     run_id: str
     status: str
     goal: str
@@ -69,6 +82,11 @@ async def start_run(
     body: AgentRunRequest,
     service: AgentRunService = Depends(get_agent_run_service),  # noqa: B008
 ) -> AgentRunResponse:
+    """Enqueue a new agent run for background execution.
+
+    Returns 202 Accepted with the run_id. Use GET /agents/{run_id}
+    or WS /agents/{run_id}/stream to monitor progress.
+    """
     run_id = await service.start_run(
         goal=body.goal,
         model=body.model,
@@ -91,6 +109,7 @@ async def get_run(
     run_id: str,
     service: AgentRunService = Depends(get_agent_run_service),  # noqa: B008
 ) -> RunStatus:
+    """Retrieve current status and metrics for a specific run."""
     try:
         run = await service.get_run(run_id)
     except RunNotFoundError as exc:
@@ -118,6 +137,11 @@ async def stop_run(
     run_id: str,
     kv: KvStorePort = Depends(get_kv_store),  # noqa: B008
 ) -> None:
+    """Request cancellation of a running agent via Redis kill-switch.
+
+    Writes a cancellation key to Redis with a 10-minute TTL.
+    The worker checks this key at the start of each iteration.
+    """
     await kv.set(_CANCEL_KEY.format(run_id=run_id), "1", ttl=600)
     log.info("run_stop_requested", run_id=run_id)
 
@@ -131,6 +155,15 @@ async def list_runs(
     limit: int = 20,
     service: AgentRunService = Depends(get_agent_run_service),  # noqa: B008
 ) -> dict[str, Any]:
+    """List agent runs with cursor-based pagination.
+
+    Args:
+        cursor: Opaque cursor from a previous response's ``next_cursor``.
+        limit: Number of results to return (1-100, default 20).
+
+    Returns:
+        Dict with ``data`` (list of run summaries) and ``next_cursor``.
+    """
     runs, next_cursor = await service.list_runs(cursor, max(1, min(limit, 100)))
 
     data = [
@@ -148,6 +181,16 @@ async def list_runs(
 
 
 async def _verify_ws_auth(websocket: WebSocket) -> None:
+    """Authenticate a WebSocket connection via token or X-API-Key header.
+
+    Closes the socket with code 4401 if authentication fails.
+
+    Args:
+        websocket: The incoming WebSocket connection.
+
+    Raises:
+        WebSocketDisconnect: If credentials are missing or invalid.
+    """
     token = websocket.query_params.get("token") or websocket.headers.get("x-api-key")
     if not token or not hmac.compare_digest(str(token), settings.agentcore_api_key):
         await websocket.close(code=4401, reason="Unauthorized")
@@ -160,6 +203,14 @@ async def stream_run(
     run_id: str,
     stream_service: RunStreamService = Depends(get_run_stream_service),  # noqa: B008
 ) -> None:
+    """Stream real-time events for a run over WebSocket.
+
+    Events include tool calls, status changes, and the final result.
+    The connection auto-closes after 30 minutes or when the run completes.
+
+    Client authentication: pass ``?token=<key>`` as query param or
+    ``X-API-Key`` header.
+    """
     await websocket.accept()
     await _verify_ws_auth(websocket)
 

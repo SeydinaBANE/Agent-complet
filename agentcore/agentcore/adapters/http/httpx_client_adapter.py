@@ -1,3 +1,10 @@
+"""HTTP client adapter — HttpClientPort implementation.
+
+Uses a shared ``httpx.AsyncClient`` with connection pooling and
+automatic retry on transport errors. Response bodies are truncated
+to ``MAX_BODY_LENGTH`` characters to prevent memory exhaustion.
+"""
+
 from typing import Any
 
 import httpx
@@ -12,6 +19,14 @@ _client: httpx.AsyncClient | None = None
 
 
 async def _get_client(timeout: float = DEFAULT_TIMEOUT) -> httpx.AsyncClient:
+    """Return the shared httpx client, creating it if needed.
+
+    Args:
+        timeout: Request timeout in seconds.
+
+    Returns:
+        A connected AsyncClient with connection pooling.
+    """
     global _client
     if _client is None or _client.is_closed:
         _client = httpx.AsyncClient(
@@ -22,6 +37,7 @@ async def _get_client(timeout: float = DEFAULT_TIMEOUT) -> httpx.AsyncClient:
 
 
 async def close_client() -> None:
+    """Close the shared httpx client. Call on application shutdown."""
     global _client
     if _client is not None and not _client.is_closed:
         await _client.aclose()
@@ -29,6 +45,8 @@ async def close_client() -> None:
 
 
 class HttpxClientAdapter:
+    """HttpClientPort backed by httpx with retry and connection pooling."""
+
     def __init__(self, timeout: float = DEFAULT_TIMEOUT) -> None:
         self._timeout = timeout
 
@@ -40,6 +58,21 @@ class HttpxClientAdapter:
         body: dict[str, Any] | None = None,
         timeout: float = DEFAULT_TIMEOUT,
     ) -> HttpResponse:
+        """Send an HTTP request with automatic retry.
+
+        Args:
+            method: HTTP method (GET, POST, etc.).
+            url: Target URL.
+            headers: Optional request headers.
+            body: Optional JSON body.
+            timeout: Per-request timeout override.
+
+        Returns:
+            HttpResponse with status_code, headers, and truncated body.
+
+        Raises:
+            httpx.TransportError: After MAX_RETRIES failed attempts.
+        """
         client = await _get_client(timeout or self._timeout)
 
         last_exc: Exception | None = None

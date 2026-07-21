@@ -1,3 +1,10 @@
+"""ARQ background worker — composition root for agent execution.
+
+This module assembles all adapters (LLM, tools, DB, Redis, pub/sub)
+into a single ``run_agent_job`` function that ARQ invokes asynchronously.
+It also defines ``WorkerSettings`` for the ARQ worker process.
+"""
+
 from typing import Any
 
 import structlog
@@ -27,6 +34,14 @@ RETRY_DELAY_SECONDS = 1
 
 
 def _build_tool_registry(cfg: Settings) -> StaticToolRegistry:
+    """Assemble all tool adapters into a static registry.
+
+    Args:
+        cfg: Application settings containing Redis URL.
+
+    Returns:
+        A ToolRegistryPort with all four tools registered.
+    """
     kv = RedisKvAdapter(cfg.redis_url)
     tools: dict[str, ToolPort] = {
         "web_search": WebSearchToolAdapter(DdgsWebSearchAdapter()),
@@ -43,6 +58,14 @@ _CANCEL_KEY = "run:cancel:{run_id}"
 
 
 async def _mark_running_with_retry(run_id: str) -> None:
+    """Mark a run as running with automatic retry on transient DB errors.
+
+    Args:
+        run_id: The run to update.
+
+    Raises:
+        Exception: Re-raised after MAX_DB_RETRIES failed attempts.
+    """
     for attempt in range(MAX_DB_RETRIES):
         try:
             async with SessionLocal() as session:
@@ -55,6 +78,12 @@ async def _mark_running_with_retry(run_id: str) -> None:
 
 
 async def _mark_finished_with_retry(run_id: str, **kwargs: Any) -> None:
+    """Mark a run as finished with automatic retry on transient DB errors.
+
+    Args:
+        run_id: The run to update.
+        **kwargs: Fields to set (status, iteration_count, tokens, cost, error).
+    """
     for attempt in range(MAX_DB_RETRIES):
         try:
             async with SessionLocal() as session:
@@ -76,6 +105,23 @@ async def run_agent_job(
     max_tokens: int,
     allowed_tools: list[str],
 ) -> dict[str, Any]:
+    """Execute a full agent run (planner → executor → validator loop).
+
+    This is the ARQ job function invoked by the worker process.
+
+    Args:
+        ctx: ARQ job context (unused, required by ARQ signature).
+        run_id: Unique identifier for this run.
+        goal: User-provided objective.
+        model: LLM model to use.
+        max_iterations: Maximum executor loops.
+        budget_usd: Cost ceiling in USD.
+        max_tokens: Max tokens per LLM call.
+        allowed_tools: Whitelist of tool names.
+
+    Returns:
+        Dict with ``run_id`` and final ``status``.
+    """
     log.info("job_started", run_id=run_id)
 
     await _mark_running_with_retry(run_id)
@@ -128,11 +174,23 @@ async def run_agent_job(
 
 
 def _redis_settings() -> RedisSettings:
+    """Build ARQ Redis connection settings from the application config."""
     url = settings.redis_url
     return RedisSettings.from_dsn(url)
 
 
 class WorkerSettings:
+    """ARQ worker configuration.
+
+    Attributes:
+        functions: List of job functions this worker can execute.
+        redis_settings: Redis connection for the ARQ job queue.
+        max_jobs: Maximum concurrent jobs per worker process.
+        job_timeout: Maximum seconds before a job is killed.
+        max_tries: Number of attempts before a job is marked as failed.
+        retry_delay: Seconds to wait between retry attempts.
+    """
+
     functions = [run_agent_job]
     redis_settings = _redis_settings()
     max_jobs = 10

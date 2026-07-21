@@ -1,3 +1,10 @@
+"""SQLAlchemy audit adapter — AuditPort implementation.
+
+Persists agent actions to the ``actions`` PostgreSQL table.
+Each record captures the run, agent node, tool name, and
+input/output payloads as JSONB.
+"""
+
 from typing import Any
 
 import structlog
@@ -9,6 +16,8 @@ log = structlog.get_logger()
 
 
 class SqlAlchemyAuditAdapter:
+    """AuditPort that writes to PostgreSQL via SQLAlchemy."""
+
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
@@ -20,6 +29,15 @@ class SqlAlchemyAuditAdapter:
         input_data: dict[str, Any],
         output_data: Any | None = None,
     ) -> None:
+        """Insert an action record into the database.
+
+        Args:
+            run_id: Foreign key to the parent run.
+            agent: Agent node name (planner/executor/validator).
+            tool: Tool name, or None for LLM-only actions.
+            input_data: Input payload stored as JSONB.
+            output_data: Output payload stored as JSONB, if any.
+        """
         action = Action(
             run_id=run_id,
             agent=agent,
