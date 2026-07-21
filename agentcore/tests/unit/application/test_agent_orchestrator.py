@@ -3,7 +3,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from agentcore.domain.entities import AgentState
+from agentcore.application.services.agent_orchestrator import AgentOrchestrator
+from agentcore.domain.entities import AgentState, TaskPlan, TaskResult
 
 
 def _base_state(**overrides: Any) -> AgentState:
@@ -30,19 +31,20 @@ def _base_state(**overrides: Any) -> AgentState:
     return cast(AgentState, state)
 
 
-@pytest.mark.asyncio
-async def test_planner_node_creates_plan() -> None:
-    from agentcore.agents.graph import _planner_node
+def _orchestrator(llm: AsyncMock) -> AgentOrchestrator:
+    return AgentOrchestrator(llm=llm)
 
+
+@pytest.mark.asyncio
+async def test_plan_creates_plan_from_llm_response() -> None:
+    llm = AsyncMock()
     plan_data = [
         {"task": "search frameworks", "tool": "web_search", "tool_input": {"query": "Python LLM"}}
     ]
+    llm.chat_json = AsyncMock(return_value=(plan_data, 10, 20))
 
-    with (
-        patch("agentcore.agents.graph.chat_json", AsyncMock(return_value=(plan_data, 10, 20))),
-        patch("agentcore.agents.graph._publish", AsyncMock()),
-    ):
-        result = await _planner_node(_base_state())
+    with patch("agentcore.application.services.agent_orchestrator._publish", AsyncMock()):
+        result = await _orchestrator(llm).plan(_base_state())
 
     assert len(result["plan"]) == 1
     assert result["plan"][0]["tool"] == "web_search"
@@ -52,36 +54,30 @@ async def test_planner_node_creates_plan() -> None:
 
 
 @pytest.mark.asyncio
-async def test_planner_node_handles_non_list_response() -> None:
-    from agentcore.agents.graph import _planner_node
+async def test_plan_handles_non_list_llm_response() -> None:
+    llm = AsyncMock()
+    llm.chat_json = AsyncMock(return_value=({"bad": "response"}, 5, 5))
 
-    with (
-        patch(
-            "agentcore.agents.graph.chat_json", AsyncMock(return_value=({"bad": "response"}, 5, 5))
-        ),
-        patch("agentcore.agents.graph._publish", AsyncMock()),
-    ):
-        result = await _planner_node(_base_state())
+    with patch("agentcore.application.services.agent_orchestrator._publish", AsyncMock()):
+        result = await _orchestrator(llm).plan(_base_state())
 
-    # Falls back to single task
     assert len(result["plan"]) == 1
 
 
 @pytest.mark.asyncio
-async def test_executor_node_runs_tool() -> None:
-    from agentcore.agents.graph import _executor_node
-    from agentcore.domain.entities import TaskPlan
-
+async def test_execute_task_runs_tool() -> None:
     plan = [TaskPlan(task="search", tool="web_search", tool_input={"query": "LLM"})]
     state = _base_state(plan=plan, current_task_index=0)
-
     mock_result = [{"title": "LangChain", "url": "https://example.com", "snippet": "..."}]
 
     with (
-        patch("agentcore.agents.graph.execute_tool", AsyncMock(return_value=mock_result)),
-        patch("agentcore.agents.graph._publish", AsyncMock()),
+        patch(
+            "agentcore.application.services.agent_orchestrator.execute_tool",
+            AsyncMock(return_value=mock_result),
+        ),
+        patch("agentcore.application.services.agent_orchestrator._publish", AsyncMock()),
     ):
-        result = await _executor_node(state)
+        result = await _orchestrator(AsyncMock()).execute_task(state)
 
     assert result["current_task_index"] == 1
     assert len(result["results"]) == 1
@@ -89,66 +85,47 @@ async def test_executor_node_runs_tool() -> None:
 
 
 @pytest.mark.asyncio
-async def test_executor_node_handles_tool_failure() -> None:
-    from agentcore.agents.graph import _executor_node
-    from agentcore.domain.entities import TaskPlan
-
+async def test_execute_task_handles_tool_failure() -> None:
     plan = [TaskPlan(task="search", tool="web_search", tool_input={"query": "test"})]
     state = _base_state(plan=plan, current_task_index=0)
 
     with (
         patch(
-            "agentcore.agents.graph.execute_tool",
+            "agentcore.application.services.agent_orchestrator.execute_tool",
             AsyncMock(side_effect=RuntimeError("network error")),
         ),
-        patch("agentcore.agents.graph._publish", AsyncMock()),
+        patch("agentcore.application.services.agent_orchestrator._publish", AsyncMock()),
     ):
-        result = await _executor_node(state)
+        result = await _orchestrator(AsyncMock()).execute_task(state)
 
     assert result["results"][0]["success"] is False
     assert result["retry_count"] == 1
 
 
 @pytest.mark.asyncio
-async def test_executor_node_skips_when_all_done() -> None:
-    from agentcore.agents.graph import _executor_node
-
+async def test_execute_task_skips_when_all_done() -> None:
     state = _base_state(plan=[], current_task_index=0)
-    result = await _executor_node(state)
+    result = await _orchestrator(AsyncMock()).execute_task(state)
     assert result == {}
 
 
 @pytest.mark.asyncio
-async def test_validator_node_synthesizes_answer() -> None:
-    from agentcore.agents.graph import _validator_node
-    from agentcore.domain.entities import TaskResult
-
+async def test_finalize_synthesizes_answer() -> None:
+    llm = AsyncMock()
+    llm.chat = AsyncMock(return_value=("LangChain is best", 15, 10))
     results = [TaskResult(task="search", tool="web_search", result={"data": "found"}, success=True)]
     state = _base_state(plan=[], current_task_index=0, results=results)
 
-    with (
-        patch("agentcore.agents.graph.chat", AsyncMock(return_value=("LangChain is best", 15, 10))),
-        patch("agentcore.agents.graph._publish", AsyncMock()),
-    ):
-        result = await _validator_node(state)
+    with patch("agentcore.application.services.agent_orchestrator._publish", AsyncMock()):
+        result = await _orchestrator(llm).finalize(state)
 
     assert result["final_answer"] == "LangChain is best"
     assert result["status"] == "completed"
 
 
 @pytest.mark.asyncio
-async def test_validator_node_skips_when_tasks_remain() -> None:
-    from agentcore.agents.graph import _validator_node
-    from agentcore.domain.entities import TaskPlan
-
+async def test_finalize_skips_when_tasks_remain() -> None:
     plan = [TaskPlan(task="t", tool="web_search", tool_input={})]
     state = _base_state(plan=plan, current_task_index=0)
-    result = await _validator_node(state)
+    result = await _orchestrator(AsyncMock()).finalize(state)
     assert result == {}
-
-
-def test_build_graph_returns_compiled() -> None:
-    from agentcore.agents.graph import build_graph
-
-    g = build_graph()
-    assert g is not None

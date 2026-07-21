@@ -7,7 +7,9 @@ import structlog
 from arq.connections import RedisSettings
 from sqlalchemy import update
 
-from agentcore.agents.graph import build_graph
+from agentcore.adapters.langgraph.graph_factory import build_graph
+from agentcore.adapters.llm.openrouter_llm_adapter import OpenRouterLlmAdapter
+from agentcore.application.services.agent_orchestrator import AgentOrchestrator
 from agentcore.config import settings
 from agentcore.db.models import Run
 from agentcore.db.session import SessionLocal
@@ -38,7 +40,11 @@ async def run_agent_job(
         )
         await session.commit()
 
-    graph = build_graph()
+    llm = OpenRouterLlmAdapter(
+        api_key=settings.openrouter_api_key, base_url=settings.openrouter_base_url
+    )
+    orchestrator = AgentOrchestrator(llm=llm)
+    graph = build_graph(orchestrator)
     initial_state = AgentState(
         run_id=run_id,
         goal=goal,
